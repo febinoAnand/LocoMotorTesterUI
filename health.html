@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Release Status · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="health">
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitoring</div>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard</a>
+      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="health.html" aria-current="page"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
+      <div class="nav-label">Configuration</div>
+      <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
+      <a href="users.html"><i data-icon="users"></i>Users</a>
+      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <div class="nav-label">Account</div>
+      <a href="index.html"><i data-icon="logout"></i>Sign out</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
+      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+    </div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
+      <div class="topbar-title"><div class="crumbs">Monitoring</div><h1>Release Status</h1></div>
+      <div class="topbar-actions">
+        <span class="clock num" data-clock></span>
+        <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
+        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+        <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>Release status</h2>
+          <p>Which motors can be released after the bench run. <span class="muted num" id="healthTime"></span></p>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" data-edit-limits><i data-icon="sliders"></i>Limits</button>
+          <button class="btn" id="printReport" type="button"><i data-icon="download"></i>Print</button>
+        </div>
+      </div>
+
+      <section class="card" aria-label="Summary">
+        <div class="summary-strip" id="healthSummary"></div>
+        <div class="prop-wrap" id="healthProp"></div>
+      </section>
+
+      <div class="tabs" id="healthTabs" role="tablist" aria-label="Filter by result">
+        <button role="tab" data-tab="all" aria-selected="true">All<span class="n">0</span></button>
+        <button role="tab" data-tab="ok" aria-selected="false">OK<span class="n">0</span></button>
+        <button role="tab" data-tab="warn" aria-selected="false">Recheck<span class="n">0</span></button>
+        <button role="tab" data-tab="crit" aria-selected="false">Not OK<span class="n">0</span></button>
+      </div>
+
+      <section class="card">
+        <div class="table-wrap">
+          <table class="table responsive release-table">
+            <thead><tr><th>Motor</th><th class="num">DE °C</th><th class="num">NDE °C</th><th class="num">Ambient °C</th><th class="num">Rise</th><th class="num">Run time</th><th>Result</th><th>Reason / action</th></tr></thead>
+            <tbody id="healthRows" aria-live="polite"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div><h3>Pass criteria</h3><div class="sub">Set these from your shed's maintenance instructions / OEM manual</div></div></div>
+        <div class="table-wrap">
+          <table class="table responsive rule-table">
+            <thead><tr><th>Check</th><th>What it means</th><th>OK</th><th>Recheck</th><th>Not OK</th></tr></thead>
+            <tbody id="ruleTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

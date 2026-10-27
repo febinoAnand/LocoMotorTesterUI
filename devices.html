@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Devices · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="devices">
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitoring</div>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard</a>
+      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="health.html"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
+      <div class="nav-label">Configuration</div>
+      <a href="devices.html" aria-current="page"><i data-icon="cpu"></i>Devices</a>
+      <a href="users.html"><i data-icon="users"></i>Users</a>
+      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <div class="nav-label">Account</div>
+      <a href="index.html"><i data-icon="logout"></i>Sign out</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
+      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+    </div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
+      <div class="topbar-title"><div class="crumbs">Configuration</div><h1>Devices</h1></div>
+      <div class="topbar-actions">
+        <span class="clock num" data-clock></span>
+        <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
+        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+        <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>Test bench devices</h2>
+          <p>Each test bench device in the loco shed monitors one or two traction motors during their bench run.</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" id="resetDemo" type="button"><i data-icon="refresh"></i>Reset demo</button>
+          <button class="btn btn-primary" id="addDevice" type="button"><i data-icon="plus"></i>Add device</button>
+        </div>
+      </div>
+
+      <section class="card card-body">
+        <div class="toolbar">
+          <div class="input-icon grow">
+            <i data-icon="search"></i>
+            <input class="input" id="devSearch" type="search" placeholder="Search devices, IPs or motors" aria-label="Search devices">
+          </div>
+          <div class="segmented" role="radiogroup" aria-label="Filter by status">
+            <input type="radio" name="devFilter" id="f-all" value="all" checked><label for="f-all">All</label>
+            <input type="radio" name="devFilter" id="f-on" value="online"><label for="f-on">Online</label>
+            <input type="radio" name="devFilter" id="f-off" value="offline"><label for="f-off">Offline</label>
+          </div>
+          <span class="muted" id="devCount" style="font-size:13px"></span>
+        </div>
+      </section>
+
+      <section class="grid grid-device-cards" id="devGrid" aria-live="polite"></section>
+    </main>
+  </div>
+</div>
+
+<!-- Add / configure device -->
+<dialog class="modal" id="deviceDialog" aria-labelledby="dlgTitle">
+  <form id="deviceForm" method="dialog" style="display:contents">
+    <div class="modal-head">
+      <div><h3 id="dlgTitle">Add new device</h3><p id="dlgSub">Register a monitoring unit and assign the motor(s) under test.</p></div>
+      <button type="button" class="icon-btn" aria-label="Close" onclick="this.closest('dialog').close()"><i data-icon="x"></i></button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field">
+          <label for="d-id">Device ID</label>
+          <input class="input mono" id="d-id" name="id" placeholder="TMU-05" pattern="[A-Za-z0-9\-]{3,16}" required autofocus>
+          <span class="hint">3–16 letters, numbers or dashes</span>
+        </div>
+        <div class="field">
+          <label for="d-name">Device name</label>
+          <input class="input" id="d-name" name="name" placeholder="Test Bench E" required>
+        </div>
+        <div class="field">
+          <label for="d-loc">Location</label>
+          <input class="input" id="d-loc" name="location" placeholder="Loco Shed · Bay 7" required>
+        </div>
+        <div class="field">
+          <label for="d-ip">IP address</label>
+          <input class="input mono" id="d-ip" name="ip" placeholder="192.168.10.50" pattern="^(\d{1,3}\.){3}\d{1,3}$" required>
+        </div>
+        <div class="field">
+          <label for="d-int">Sampling interval</label>
+          <select class="select" id="d-int" name="interval">
+            <option value="1">Every 1 s</option>
+            <option value="2" selected>Every 2 s</option>
+            <option value="5">Every 5 s</option>
+            <option value="10">Every 10 s</option>
+          </select>
+        </div>
+        <div class="field">
+          <span class="label">Connection</span>
+          <label class="check switch-row"><input type="checkbox" name="online" checked> Device online</label>
+        </div>
+        <div class="field full new-only">
+          <span class="label">Motors under test</span>
+          <div class="segmented" role="radiogroup" aria-label="Motors under test">
+            <input type="radio" name="motorCount" id="mc0" value="0"><label for="mc0">None yet</label>
+            <input type="radio" name="motorCount" id="mc1" value="1"><label for="mc1">1 motor</label>
+            <input type="radio" name="motorCount" id="mc2" value="2" checked><label for="mc2">2 motors</label>
+          </div>
+        </div>
+      </div>
+
+      <fieldset class="fieldset new-only" id="slot1">
+        <legend>Motor · Slot 1</legend>
+        <div class="form-grid">
+          <div class="field"><label for="m1id">Motor ID</label><input class="input mono" id="m1id" name="m1id" placeholder="TM-0001" required></div>
+          <div class="field"><label for="m1model">Model / type</label><input class="input" id="m1model" name="m1model" placeholder="3-phase AC traction motor"></div>
+          <div class="field full"><label for="m1loco">Locomotive / coach</label><input class="input" id="m1loco" name="m1loco" placeholder="WAG-9 #31245"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="fieldset new-only" id="slot2">
+        <legend>Motor · Slot 2</legend>
+        <div class="form-grid">
+          <div class="field"><label for="m2id">Motor ID</label><input class="input mono" id="m2id" name="m2id" placeholder="TM-0002" required></div>
+          <div class="field"><label for="m2model">Model / type</label><input class="input" id="m2model" name="m2model" placeholder="3-phase AC traction motor"></div>
+          <div class="field full"><label for="m2loco">Locomotive / coach</label><input class="input" id="m2loco" name="m2loco" placeholder="WAG-9 #31245"></div>
+        </div>
+      </fieldset>
+
+      <p class="muted new-only" style="font-size:12px">Fit <b>Sensor 1</b> on the DE (pinion-end) bearing housing, <b>Sensor 2</b> on the NDE (commutator-end) bearing housing, and the <b>Ambient</b> probe in shed air near the bench.</p>
+    </div>
+
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="dlgSave">Add device</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>

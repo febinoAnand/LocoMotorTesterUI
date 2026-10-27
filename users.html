@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="users">
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitoring</div>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard</a>
+      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="health.html"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
+      <div class="nav-label">Configuration</div>
+      <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
+      <a href="users.html" aria-current="page"><i data-icon="users"></i>Users</a>
+      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <div class="nav-label">Account</div>
+      <a href="index.html"><i data-icon="logout"></i>Sign out</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
+      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+    </div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
+      <div class="topbar-title"><div class="crumbs">Configuration</div><h1>Users</h1></div>
+      <div class="topbar-actions">
+        <span class="clock num" data-clock></span>
+        <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
+        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+        <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>Users &amp; access</h2>
+          <p>Manage who can view readings, run tests and configure devices.</p>
+        </div>
+        <div class="actions">
+          <a class="btn" href="roles.html"><i data-icon="key"></i>Roles &amp; permissions</a>
+          <button class="btn btn-primary" id="addUser" type="button"><i data-icon="plus"></i>Invite user</button>
+        </div>
+      </div>
+
+      <section class="grid grid-kpi" id="userStats" aria-label="User summary"></section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="toolbar" style="flex:1">
+            <div class="input-icon grow">
+              <i data-icon="search"></i>
+              <input class="input" id="userSearch" type="search" placeholder="Search name or email" aria-label="Search users">
+            </div>
+            <select class="select" id="roleFilter" aria-label="Filter by role" style="width:auto;min-width:170px">
+              <option value="">All roles</option>
+              <option>Administrator</option>
+              <option>Test Engineer</option>
+              <option>Operator</option>
+              <option>Viewer</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table responsive">
+            <thead><tr><th>User</th><th>Role</th><th>Device access</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Invite / edit user -->
+<dialog class="modal" id="userDialog" aria-labelledby="uTitle">
+  <form id="userForm" style="display:contents">
+    <div class="modal-head">
+      <div><h3 id="uTitle">Invite new user</h3><p>They'll receive an email to set up their account.</p></div>
+      <button type="button" class="icon-btn" aria-label="Close" onclick="this.closest('dialog').close()"><i data-icon="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label for="u-name">Full name</label><input class="input" id="u-name" name="name" required autofocus></div>
+        <div class="field"><label for="u-email">Email</label><input class="input" id="u-email" name="email" type="email" required></div>
+        <div class="field"><label for="u-phone">Phone</label><input class="input" id="u-phone" name="phone" type="tel" placeholder="+91 …"></div>
+        <div class="field">
+          <label for="u-role">Role</label>
+          <select class="select" id="u-role" name="role">
+            <option>Administrator</option>
+            <option>Test Engineer</option>
+            <option selected>Operator</option>
+            <option>Viewer</option>
+          </select>
+        </div>
+        <div class="field full" id="pwField">
+          <label for="u-pw">Temporary password</label>
+          <input class="input" id="u-pw" name="password" type="password" minlength="8" autocomplete="new-password">
+          <span class="hint">At least 8 characters. The user must change it on first sign-in.</span>
+        </div>
+      </div>
+
+      <fieldset class="fieldset">
+        <legend>Device access</legend>
+        <label class="check"><input type="checkbox" name="allDevices"> All devices (including ones added later)</label>
+        <div id="userDevices" style="display:grid;gap:8px"></div>
+      </fieldset>
+
+      <label class="check"><input type="checkbox" name="active" checked> Account active</label>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="uSave">Send invite</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>

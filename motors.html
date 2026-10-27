@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Motors · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="motors">
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitoring</div>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard</a>
+      <a href="motors.html" aria-current="page"><i data-icon="motor"></i>Motors</a>
+      <a href="health.html"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
+      <div class="nav-label">Configuration</div>
+      <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
+      <a href="users.html"><i data-icon="users"></i>Users</a>
+      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <div class="nav-label">Account</div>
+      <a href="index.html"><i data-icon="logout"></i>Sign out</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
+      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+    </div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
+      <div class="topbar-title"><div class="crumbs">Monitoring</div><h1>Motors</h1></div>
+      <div class="topbar-actions">
+        <span class="clock num" data-clock></span>
+        <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
+        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+        <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>Motor bench run</h2>
+          <p>DE and NDE bearing temperatures against shed ambient, with the 10-minute log sheet.</p>
+        </div>
+        <div class="actions">
+          <select class="select" id="devSel" aria-label="Test bench" style="width:auto;min-width:220px"></select>
+          <select class="select" id="motorSel" aria-label="Motor" style="width:auto;min-width:170px"></select>
+        </div>
+      </div>
+
+      <section class="card motor-hero-card" id="motorHero" aria-live="polite"></section>
+
+      <section class="card motor-detail">
+        <div class="card-head">
+          <div><h3>Run trend</h3><div class="sub">Since the bench run started · hover for readings</div></div>
+          <div class="toolbar">
+            <div class="legend" id="runLegend"></div>
+            <div class="segmented" role="radiogroup" aria-label="Show">
+              <input type="radio" name="trendMode" id="tm-temp" value="temp" checked><label for="tm-temp">Temperature</label>
+              <input type="radio" name="trendMode" id="tm-rise" value="rise"><label for="tm-rise">Rise<span class="hide-xs"> above ambient</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="card-body"><div class="chart" id="runChart"></div></div>
+      </section>
+
+      <section class="card motor-detail">
+        <div class="card-head">
+          <div><h3>Log sheet</h3><div class="sub" id="logMeta">Reading every 10 minutes</div></div>
+          <button type="button" class="btn btn-sm" onclick="window.print()"><i data-icon="download"></i>Print</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table log-table">
+            <thead><tr><th>Time</th><th class="num">DE °C</th><th class="num">NDE °C</th><th class="num">Ambient °C</th><th class="num">DE rise K</th><th class="num">NDE rise K</th><th>Result</th></tr></thead>
+            <tbody id="logSheet"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div><h3>Motor register</h3><div class="sub" id="motorCount"></div></div>
+          <div class="toolbar">
+            <div class="input-icon"><i data-icon="search"></i><input class="input" id="motorSearch" type="search" placeholder="Search motors" aria-label="Search motors"></div>
+            <button type="button" class="btn btn-primary" data-add-motor=""><i data-icon="plus"></i>Add motor</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table responsive">
+            <thead><tr><th>Motor</th><th class="col-opt">Test bench</th><th class="num">DE °C</th><th class="num">NDE °C</th><th class="num col-opt">Ambient °C</th><th class="num col-opt">Rise</th><th>Result</th><th></th></tr></thead>
+            <tbody id="motorTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

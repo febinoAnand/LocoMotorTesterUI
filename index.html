@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · TractionTherm</title>
+  <meta name="description" content="Train traction motor temperature monitoring">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="login">
+  <div class="auth">
+    <!-- Brand / product panel (hidden on tablet & phone) -->
+    <section class="auth-visual" aria-hidden="true">
+      <div class="brand">
+        <div class="brand-mark"><i data-icon="thermo"></i></div>
+        <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+      </div>
+
+      <div>
+        <h2>Bearing temperature monitoring for traction motor bench runs in the loco shed.</h2>
+        <p class="lead">Run two motors per test bench at once. DE and NDE bearing probes are judged against shed ambient, with a 10-minute log sheet for the job card.</p>
+      </div>
+
+      <div class="auth-preview">
+        <div class="hd"><span>TM-4471 · Bench run</span><span class="badge ok"><span class="pulse"></span>Live</span></div>
+        <div class="pv"><span>DE bearing</span><b data-base="51.4">51.4°</b><i style="--w:54%;--c:#2a78d6"></i></div>
+        <div class="pv"><span>NDE bearing</span><b data-base="53.6">53.6°</b><i style="--w:56%;--c:#eb6834"></i></div>
+        <div class="pv"><span>Ambient</span><b data-base="31.0">31.0°</b><i style="--w:26%;--c:#1baf7a"></i></div>
+      </div>
+
+      <div class="auth-stats">
+        <div><b>2</b><span>Motors per device</span></div>
+        <div><b>3</b><span>Probes per motor</span></div>
+        <div><b>10 min</b><span>Log sheet interval</span></div>
+      </div>
+
+      <div class="auth-foot">© 2026 TractionTherm · Rolling stock test systems</div>
+    </section>
+
+    <!-- Sign-in form -->
+    <main class="auth-form-wrap">
+      <form class="auth-form" id="loginForm" novalidate>
+        <div class="mobile-brand">
+          <div class="brand-mark"><i data-icon="thermo"></i></div>
+          <div class="brand-name">TractionTherm</div>
+        </div>
+
+        <div>
+          <h1>Welcome back</h1>
+          <p class="lead">Sign in to monitor traction motor bench runs.</p>
+        </div>
+
+        <div class="form-error" id="loginError" role="alert"></div>
+
+        <div class="field">
+          <label for="username">Username</label>
+          <div class="input-icon">
+            <i data-icon="users"></i>
+            <input class="input" id="username" name="username" type="text" autocomplete="username" placeholder="Enter your username" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-icon">
+            <i data-icon="lock"></i>
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+            <button type="button" class="trail" id="togglePw" aria-label="Show password"><i data-icon="eye"></i></button>
+          </div>
+        </div>
+
+        <div class="auth-row">
+          <label class="check"><input type="checkbox" name="remember" checked> Keep me signed in</label>
+          <a href="#" onclick="return false">Forgot password?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+
+        <div class="divider">or</div>
+        <button type="button" class="btn btn-block"><i data-icon="key"></i>Sign in with SSO</button>
+
+        <p class="muted" style="font-size:12px;text-align:center">Demo login: username <b>admin</b> · password <b>admin</b></p>
+      </form>
+    </main>
+  </div>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
