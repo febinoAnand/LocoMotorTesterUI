@@ -15,13 +15,10 @@
     </div>
     <nav class="nav">
       <div class="nav-label">Monitoring</div>
-      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard</a>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
-      <a href="health.html"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html" aria-current="page"><i data-icon="cpu"></i>Devices</a>
-      <a href="users.html"><i data-icon="users"></i>Users</a>
-      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -39,7 +36,7 @@
       <div class="topbar-actions">
         <span class="clock num" data-clock></span>
         <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
-        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <a class="icon-btn" href="dashboard.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
         <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
         <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
       </div>
@@ -48,8 +45,8 @@
     <main class="content">
       <div class="page-head">
         <div>
-          <h2>Test bench devices</h2>
-          <p>Each test bench device in the loco shed monitors one or two traction motors during their bench run.</p>
+          <h2>Devices</h2>
+          <p>Each device monitors one or two motors · every motor has Sensor 1, Sensor 2 and Ambient.</p>
         </div>
         <div class="actions">
           <button class="btn btn-ghost" id="resetDemo" type="button"><i data-icon="refresh"></i>Reset demo</button>
@@ -94,7 +91,7 @@
         </div>
         <div class="field">
           <label for="d-name">Device name</label>
-          <input class="input" id="d-name" name="name" placeholder="Test Bench E" required>
+          <input class="input" id="d-name" name="name" placeholder="Device E" required>
         </div>
         <div class="field">
           <label for="d-loc">Location</label>
@@ -118,8 +115,8 @@
           <label class="check switch-row"><input type="checkbox" name="online" checked> Device online</label>
         </div>
         <div class="field full new-only">
-          <span class="label">Motors under test</span>
-          <div class="segmented" role="radiogroup" aria-label="Motors under test">
+          <span class="label">Motors to monitor</span>
+          <div class="segmented" role="radiogroup" aria-label="Motors to monitor">
             <input type="radio" name="motorCount" id="mc0" value="0"><label for="mc0">None yet</label>
             <input type="radio" name="motorCount" id="mc1" value="1"><label for="mc1">1 motor</label>
             <input type="radio" name="motorCount" id="mc2" value="2" checked><label for="mc2">2 motors</label>
@@ -145,7 +142,7 @@
         </div>
       </fieldset>
 
-      <p class="muted new-only" style="font-size:12px">Fit <b>Sensor 1</b> on the DE (pinion-end) bearing housing, <b>Sensor 2</b> on the NDE (commutator-end) bearing housing, and the <b>Ambient</b> probe in shed air near the bench.</p>
+      <p class="muted new-only" style="font-size:12px">Each motor uses 3 probes: <b>Sensor 1</b> and <b>Sensor 2</b> on the motor, and <b>Ambient</b> for the surrounding air.</p>
     </div>
 
     <div class="modal-foot">

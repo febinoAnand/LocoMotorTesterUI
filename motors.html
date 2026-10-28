@@ -15,13 +15,10 @@
     </div>
     <nav class="nav">
       <div class="nav-label">Monitoring</div>
-      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard</a>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="motors.html" aria-current="page"><i data-icon="motor"></i>Motors</a>
-      <a href="health.html"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
-      <a href="users.html"><i data-icon="users"></i>Users</a>
-      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -39,7 +36,7 @@
       <div class="topbar-actions">
         <span class="clock num" data-clock></span>
         <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
-        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <a class="icon-btn" href="dashboard.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
         <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
         <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
       </div>
@@ -48,11 +45,11 @@
     <main class="content">
       <div class="page-head">
         <div>
-          <h2>Motor bench run</h2>
-          <p>DE and NDE bearing temperatures against shed ambient, with the 10-minute log sheet.</p>
+          <h2>Motor readings</h2>
+          <p>Live Sensor 1, Sensor 2 and Ambient temperatures for one motor.</p>
         </div>
         <div class="actions">
-          <select class="select" id="devSel" aria-label="Test bench" style="width:auto;min-width:220px"></select>
+          <select class="select" id="devSel" aria-label="Device" style="width:auto;min-width:220px"></select>
           <select class="select" id="motorSel" aria-label="Motor" style="width:auto;min-width:170px"></select>
         </div>
       </div>
@@ -61,7 +58,15 @@
 
       <section class="card motor-detail">
         <div class="card-head">
-          <div><h3>Run trend</h3><div class="sub">Since the bench run started · hover for readings</div></div>
+          <div><h3>Motor condition</h3><div class="sub">How the motor is heating, predicted from the readings so far</div></div>
+          <div id="condPill"></div>
+        </div>
+        <div class="cond-grid" id="condBody"></div>
+      </section>
+
+      <section class="card motor-detail">
+        <div class="card-head">
+          <div><h3>Temperature trend</h3><div class="sub">Since monitoring started · dashed lines = heating-model prediction · hover for readings</div></div>
           <div class="toolbar">
             <div class="legend" id="runLegend"></div>
             <div class="segmented" role="radiogroup" aria-label="Show">
@@ -73,18 +78,17 @@
         <div class="card-body"><div class="chart" id="runChart"></div></div>
       </section>
 
-      <section class="card motor-detail">
-        <div class="card-head">
-          <div><h3>Log sheet</h3><div class="sub" id="logMeta">Reading every 10 minutes</div></div>
-          <button type="button" class="btn btn-sm" onclick="window.print()"><i data-icon="download"></i>Print</button>
-        </div>
-        <div class="table-wrap">
-          <table class="table log-table">
-            <thead><tr><th>Time</th><th class="num">DE °C</th><th class="num">NDE °C</th><th class="num">Ambient °C</th><th class="num">DE rise K</th><th class="num">NDE rise K</th><th>Result</th></tr></thead>
-            <tbody id="logSheet"></tbody>
-          </table>
-        </div>
-      </section>
+      <div class="grid grid-pair motor-detail">
+        <section class="card">
+          <div class="card-head"><div><h3>Thermal equilibrium</h3><div class="sub" id="eqMeta">Rate of change of the rise, per 10-minute interval</div></div>
+            <div class="legend"><span><i style="background:var(--series-1)"></i>Heating</span><span><i style="background:var(--ok)"></i>&lt; 2 K/h</span></div></div>
+          <div class="card-body" id="eqChart"></div>
+        </section>
+        <section class="card" id="cmpCard">
+          <div class="card-head"><div><h3>Compared with the other motor</h3><div class="sub" id="cmpSub"></div></div></div>
+          <div class="card-body"><div class="chart" id="cmpChart"></div></div>
+        </section>
+      </div>
 
       <section class="card">
         <div class="card-head">
@@ -96,7 +100,7 @@
         </div>
         <div class="table-wrap">
           <table class="table responsive">
-            <thead><tr><th>Motor</th><th class="col-opt">Test bench</th><th class="num">DE °C</th><th class="num">NDE °C</th><th class="num col-opt">Ambient °C</th><th class="num col-opt">Rise</th><th>Result</th><th></th></tr></thead>
+            <thead><tr><th>Motor</th><th class="col-opt">Device</th><th class="num">Sensor 1 °C</th><th class="num">Sensor 2 °C</th><th class="num col-opt">Ambient °C</th><th class="num col-opt">Rise</th><th>Result</th><th></th></tr></thead>
             <tbody id="motorTable"></tbody>
           </table>
         </div>

@@ -15,13 +15,10 @@
     </div>
     <nav class="nav">
       <div class="nav-label">Monitoring</div>
-      <a href="dashboard.html" aria-current="page"><i data-icon="grid"></i>Dashboard</a>
+      <a href="dashboard.html" aria-current="page"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
-      <a href="health.html"><i data-icon="health"></i>Release Status<span class="count" data-alert-count hidden>0</span></a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
-      <a href="users.html"><i data-icon="users"></i>Users</a>
-      <a href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -39,7 +36,7 @@
       <div class="topbar-actions">
         <span class="clock num" data-clock></span>
         <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
-        <a class="icon-btn" href="health.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <a class="icon-btn" href="dashboard.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
         <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
         <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
       </div>
@@ -48,11 +45,8 @@
     <main class="content">
       <div class="page-head">
         <div>
-          <h2>Shed test benches</h2>
-          <p>Live bearing temperatures of traction motors on bench run in the loco shed.</p>
-        </div>
-        <div class="actions">
-          <a class="btn btn-primary" href="health.html"><i data-icon="health"></i>Release status</a>
+          <h2>Motor temperatures</h2>
+          <p>Live readings from every device · each motor has Sensor 1, Sensor 2 and Ambient.</p>
         </div>
       </div>
 
@@ -62,19 +56,19 @@
 
       <section class="card">
         <div class="card-head">
-          <div><h3>Bearing rise above ambient</h3><div class="sub">Every motor on bench run, worst first · lines mark the warning and fail limits</div></div>
+          <div><h3>Temperature rise above ambient</h3><div class="sub">Every motor, highest first · lines mark the warning and alarm limits</div></div>
           <div class="legend">
-            <span><i style="background:var(--series-1)"></i>DE bearing</span>
-            <span><i style="background:var(--series-2)"></i>NDE bearing</span>
+            <span><i style="background:var(--series-1)"></i>Sensor 1</span>
+            <span><i style="background:var(--series-2)"></i>Sensor 2</span>
           </div>
         </div>
         <div class="card-body" id="riseChart"></div>
       </section>
 
-      <section aria-label="Test benches">
+      <section aria-label="Devices">
         <div class="section-title">
-          <h3>Test benches</h3>
-          <span>Pass: bearing rise &lt; <span data-limit="riseCrit">30</span> K above shed ambient</span>
+          <h3>Devices</h3>
+          <span>Alarm when a sensor is <span data-limit="riseCrit">30</span> K above ambient</span>
         </div>
         <div class="grid grid-devices" id="deviceGrid"></div>
       </section>
