@@ -16,9 +16,14 @@
     <nav class="nav">
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
-      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
+      <a href="reports.html"><i data-icon="report"></i>Reports</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html" aria-current="page"><i data-icon="cpu"></i>Devices</a>
+      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <div class="nav-label nav-admin">Administration</div>
+      <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
+      <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -46,7 +51,7 @@
       <div class="page-head">
         <div>
           <h2>Devices</h2>
-          <p>Each device monitors one or two motors · every motor has Sensor 1, Sensor 2 and Ambient.</p>
+          <p>Register the monitoring devices in the shed · assign motors to them from the Motors page.</p>
         </div>
         <div class="actions">
           <button class="btn btn-ghost" id="resetDemo" type="button"><i data-icon="refresh"></i>Reset demo</button>
@@ -58,7 +63,7 @@
         <div class="toolbar">
           <div class="input-icon grow">
             <i data-icon="search"></i>
-            <input class="input" id="devSearch" type="search" placeholder="Search devices, IPs or motors" aria-label="Search devices">
+            <input class="input" id="devSearch" type="search" placeholder="Search by device, location, IP or motor" aria-label="Search devices">
           </div>
           <div class="segmented" role="radiogroup" aria-label="Filter by status">
             <input type="radio" name="devFilter" id="f-all" value="all" checked><label for="f-all">All</label>
@@ -69,7 +74,14 @@
         </div>
       </section>
 
-      <section class="grid grid-device-cards" id="devGrid" aria-live="polite"></section>
+      <section class="card">
+        <div class="table-wrap">
+          <table class="table responsive device-table">
+            <thead><tr><th>Device</th><th>Location</th><th>IP address</th><th>Motors</th><th class="num col-opt">Sampling</th><th class="col-opt">Signal</th><th>Status</th><th class="num">Actions</th></tr></thead>
+            <tbody id="devRows" aria-live="polite"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -78,7 +90,7 @@
 <dialog class="modal" id="deviceDialog" aria-labelledby="dlgTitle">
   <form id="deviceForm" method="dialog" style="display:contents">
     <div class="modal-head">
-      <div><h3 id="dlgTitle">Add new device</h3><p id="dlgSub">Register a monitoring unit and assign the motor(s) under test.</p></div>
+      <div><h3 id="dlgTitle">Add new device</h3><p id="dlgSub">Register a monitoring device. Motors are assigned to it from the Motors page.</p></div>
       <button type="button" class="icon-btn" aria-label="Close" onclick="this.closest('dialog').close()"><i data-icon="x"></i></button>
     </div>
 
@@ -114,35 +126,7 @@
           <span class="label">Connection</span>
           <label class="check switch-row"><input type="checkbox" name="online" checked> Device online</label>
         </div>
-        <div class="field full new-only">
-          <span class="label">Motors to monitor</span>
-          <div class="segmented" role="radiogroup" aria-label="Motors to monitor">
-            <input type="radio" name="motorCount" id="mc0" value="0"><label for="mc0">None yet</label>
-            <input type="radio" name="motorCount" id="mc1" value="1"><label for="mc1">1 motor</label>
-            <input type="radio" name="motorCount" id="mc2" value="2" checked><label for="mc2">2 motors</label>
-          </div>
-        </div>
       </div>
-
-      <fieldset class="fieldset new-only" id="slot1">
-        <legend>Motor · Slot 1</legend>
-        <div class="form-grid">
-          <div class="field"><label for="m1id">Motor ID</label><input class="input mono" id="m1id" name="m1id" placeholder="TM-0001" required></div>
-          <div class="field"><label for="m1model">Model / type</label><input class="input" id="m1model" name="m1model" placeholder="3-phase AC traction motor"></div>
-          <div class="field full"><label for="m1loco">Locomotive / coach</label><input class="input" id="m1loco" name="m1loco" placeholder="WAG-9 #31245"></div>
-        </div>
-      </fieldset>
-
-      <fieldset class="fieldset new-only" id="slot2">
-        <legend>Motor · Slot 2</legend>
-        <div class="form-grid">
-          <div class="field"><label for="m2id">Motor ID</label><input class="input mono" id="m2id" name="m2id" placeholder="TM-0002" required></div>
-          <div class="field"><label for="m2model">Model / type</label><input class="input" id="m2model" name="m2model" placeholder="3-phase AC traction motor"></div>
-          <div class="field full"><label for="m2loco">Locomotive / coach</label><input class="input" id="m2loco" name="m2loco" placeholder="WAG-9 #31245"></div>
-        </div>
-      </fieldset>
-
-      <p class="muted new-only" style="font-size:12px">Each motor uses 3 probes: <b>Sensor 1</b> and <b>Sensor 2</b> on the motor, and <b>Ambient</b> for the surrounding air.</p>
     </div>
 
     <div class="modal-foot">

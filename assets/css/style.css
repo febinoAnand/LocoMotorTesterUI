@@ -1022,3 +1022,170 @@ svg.ring[width="58"] .ring-track, svg.ring[width="58"] .ring-arc { stroke-width:
 }
 
 .summary-strip > div:nth-child(4) { border-right: 0; }
+
+/* =========================================================
+   Monitor · Devices table · Motor management · Reports
+   ========================================================= */
+/* monitor: motor widgets are clickable; the one shown below is outlined */
+.motor-panel[data-pick-motor] { cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+.motor-panel[data-pick-motor]:hover { border-color: var(--border-strong); }
+.motor-panel.is-selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft), 0 0 0 1px var(--primary); }
+#detailTitle { scroll-margin-top: 80px; }
+
+/* device + motor tables */
+.cell-dev { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cell-dev .device-ico { width: 34px; height: 34px; flex: none; }
+.cell-dev b { display: block; }
+.cell-dev span { font-size: 12px; color: var(--muted); }
+.motor-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.motor-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 3px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; font-weight: 600; font-family: var(--mono); background: var(--surface-2); white-space: nowrap; }
+.motor-chip .v-dot { width: 18px; height: 18px; }
+.motor-chips .link-btn { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--primary); }
+.motor-chips .link-btn svg { width: 13px; height: 13px; }
+.chip-count { display: block; font-size: 11px; margin-top: 3px; }
+.last-seen { display: block; font-size: 11px; margin-top: 3px; }
+.device-table td, .motor-table td { vertical-align: middle; }
+.motor-table td .link-btn { color: var(--primary); font-size: 12px; margin-left: 4px; }
+@media (max-width: 1200px) { .row-actions .hide-sm { display: none; } }
+
+/* report filters */
+.report-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
+.report-filters .field[hidden] { display: none; }
+.report-card .table-wrap { max-height: 560px; overflow: auto; }
+.report-card thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); }
+.report-table td, .report-table th { white-space: nowrap; }
+.print-head { display: none; }
+@media (max-width: 860px) { .report-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .report-filters { grid-template-columns: minmax(0, 1fr); }
+  .report-card .table-wrap { max-height: none; }
+  .report-table td { white-space: normal; }
+}
+
+/* printed report: just the title block and the table */
+@media print {
+  body[data-page="reports"] .content > :not(.report-card) { display: none !important; }
+  body[data-page="reports"] .report-card .card-head, body[data-page="reports"] .report-card .card-foot { display: none; }
+  .print-head { display: block; padding: 0 0 10px; }
+  .print-head h2 { font-size: 18px; margin: 0 0 4px; }
+  .print-head p { font-size: 11px; color: #444; margin: 0 0 2px; }
+  .report-card { border: 0; }
+  .report-card .table-wrap { max-height: none; overflow: visible; }
+  .report-table { font-size: 10px; }
+  .report-table th, .report-table td { padding: 4px 6px; white-space: normal; }
+  .report-table thead { display: table-header-group !important; }
+  .report-table tr { display: table-row !important; }
+  .report-table td, .report-table th { display: table-cell !important; text-align: left; }
+  .report-table td::before { display: none !important; }
+  .report-table .verdict-pill { padding: 0; background: none !important; color: #000 !important; font-size: 10px; }
+  .report-table .verdict-pill svg { display: none; }
+  .content { padding: 0; }
+}
+
+/* keep identifiers on one line; on laptops action buttons are icon-only so every action stays visible */
+.cell-dev b, .cell-dev span, .motor-table .lead-cell b, .motor-chip { white-space: nowrap; }
+.device-table td:nth-child(2), .motor-table td:nth-child(3) { white-space: nowrap; }
+@media (max-width: 1500px) { .row-actions .hide-sm { display: none; } }
+@media (max-width: 1400px) { .motor-table .col-opt, .device-table .col-opt { display: none; } }
+@media (max-width: 640px) {
+  .device-table td:nth-child(2), .motor-table td:nth-child(3) { white-space: normal; }
+}
+
+/* =========================================================
+   Access control: controls the signed-in role may not use are hidden
+   ========================================================= */
+.no-perm-motors [data-add-motor], .no-perm-motors [data-edit-motor], .no-perm-motors [data-del-motor],
+.no-perm-devices #addDevice, .no-perm-devices #resetDemo, .no-perm-devices [data-edit], .no-perm-devices [data-del],
+.no-perm-limits [data-edit-limits], .no-perm-reports #repCsv, .no-perm-reports #repPrint,
+.no-perm-users .nav-admin, .no-perm-motors .empty-slot .btn { display: none !important; }
+.no-perm-trigger .trigger { pointer-events: none; opacity: .55; }
+
+/* monitoring on / off switch */
+.trigger { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); font: inherit; font-size: 12px; font-weight: 700; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.trigger i { width: 30px; height: 18px; border-radius: 999px; background: var(--surface-3); position: relative; transition: background .15s; flex: none; }
+.trigger i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.trigger.on { border-color: color-mix(in srgb, var(--ok) 55%, var(--border)); color: var(--ok-text); }
+.trigger.on i { background: var(--ok); }
+.trigger.on i::after { transform: translateX(12px); }
+.trigger:disabled { opacity: .5; cursor: not-allowed; }
+.trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.mp-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.mh-trigger { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+
+/* stopped run */
+.verdict-pill.stop { background: var(--surface-3); color: var(--text-2); }
+.v-dot.stop { background: var(--surface-3); color: var(--text-2); }
+.motor-panel.is-stop .readings .r-value { color: var(--muted); }
+.panel-heat.stopped { color: var(--text-2); }
+.panel-heat.stopped > svg { width: 22px; height: 22px; flex: none; margin: 0 8px; color: var(--muted); }
+
+/* users + roles */
+.role-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.role-administrator { background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); }
+.role-supervisor { background: color-mix(in srgb, var(--series-2) 18%, transparent); color: color-mix(in srgb, var(--series-2) 75%, var(--text)); }
+.role-operator { background: color-mix(in srgb, var(--series-3) 18%, transparent); color: color-mix(in srgb, var(--series-3) 70%, var(--text)); }
+.role-viewer { background: var(--surface-3); color: var(--text-2); }
+.user-table .avatar { width: 34px; height: 34px; flex: none; }
+.you-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 11px; font-weight: 700; vertical-align: 1px; }
+.role-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.role-card { padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.role-card p { font-size: 13px; color: var(--text-2); margin: 0; flex: 1; }
+.role-card .btn { align-self: flex-start; }
+.role-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.role-meter { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); }
+.role-meter .bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; display: block; }
+.role-meter .bar i { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+.perm-table th.perm-col, .perm-table td.perm-cell { text-align: center; width: 120px; }
+.perm-note { display: block; font-size: 11px; color: var(--muted); }
+.perm-check { display: inline-grid; cursor: pointer; }
+.perm-check input { position: absolute; opacity: 0; pointer-events: none; }
+.perm-check span { width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; color: transparent; background: var(--surface); transition: background .12s, border-color .12s; }
+.perm-check span svg { width: 15px; height: 15px; }
+.perm-check input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
+.perm-check input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.perm-check.locked { cursor: not-allowed; }
+.perm-check.locked input:checked + span { background: var(--surface-3); border-color: var(--border-strong); color: var(--text-2); }
+.perm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.perm-list li { display: flex; align-items: center; gap: 8px; }
+.perm-list svg { width: 16px; height: 16px; color: var(--ok-text); flex: none; }
+@media (max-width: 1200px) { .role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .role-grid { grid-template-columns: minmax(0, 1fr); }
+  .perm-table th, .perm-table td { padding: 10px 6px; font-size: 12px; }
+  .perm-table th:first-child, .perm-table td:first-child { padding-left: 14px; }
+  .perm-table th.perm-col, .perm-table td.perm-cell { width: auto; }
+  .perm-table th.perm-col { font-size: 10px; writing-mode: horizontal-tb; }
+}
+
+/* page sections never grow past the screen; wide tables scroll inside their card */
+.content > * { min-width: 0; }
+@media (max-width: 640px) {
+  .perm-table th.perm-col { white-space: normal; word-break: break-word; line-height: 1.2; }
+  .perm-table th, .perm-table td { padding-left: 4px; padding-right: 4px; }
+  .mh-actions { flex-wrap: wrap; }
+  .mh-trigger { width: 100%; justify-content: space-between; }
+}
+.user-table .avatar { display: grid; place-items: center; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; }
+
+/* very wide screens: keep the content centred instead of hugging the left */
+.content { margin-left: auto; margin-right: auto; }
+.motor-panel-head b { white-space: nowrap; }
+
+/* management tables stack into cards on landscape phones and small tablets too */
+@media (max-width: 960px) {
+  .motor-table thead, .device-table thead, .user-table thead { display: none; }
+  .motor-table, .motor-table tbody, .motor-table tr, .motor-table td,
+  .device-table, .device-table tbody, .device-table tr, .device-table td,
+  .user-table, .user-table tbody, .user-table tr, .user-table td { display: block; width: 100%; }
+  .motor-table tr, .device-table tr, .user-table tr { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .motor-table tr:last-child, .device-table tr:last-child, .user-table tr:last-child { border-bottom: 0; }
+  .motor-table td, .device-table td, .user-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border: 0; text-align: right; white-space: normal; }
+  .motor-table td::before, .device-table td::before, .user-table td::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; flex: none; }
+  .motor-table td.lead-cell, .device-table td.lead-cell, .user-table td.lead-cell { padding-bottom: 10px; justify-content: flex-start; text-align: left; }
+  .motor-table td.lead-cell::before, .device-table td.lead-cell::before, .user-table td.lead-cell::before { display: none; }
+  .motor-table td .row-actions, .device-table td .row-actions, .user-table td .row-actions { justify-content: flex-end; }
+  .motor-table td[colspan], .device-table td[colspan], .user-table td[colspan] { justify-content: center; }
+  .motor-table td[colspan]::before, .device-table td[colspan]::before, .user-table td[colspan]::before { display: none; }
+  .device-table .motor-chips { justify-content: flex-end; }
+  .device-table .chip-count { text-align: right; }
+}
