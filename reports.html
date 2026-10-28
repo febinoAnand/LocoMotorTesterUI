@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reports · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="reports">
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitoring</div>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
+      <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
+      <a href="reports.html" aria-current="page"><i data-icon="report"></i>Reports</a>
+      <div class="nav-label">Configuration</div>
+      <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
+      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <div class="nav-label nav-admin">Administration</div>
+      <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
+      <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <div class="nav-label">Account</div>
+      <a href="index.html"><i data-icon="logout"></i>Sign out</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
+      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+    </div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
+      <div class="topbar-title"><div class="crumbs">Monitoring</div><h1>Reports</h1></div>
+      <div class="topbar-actions">
+        <span class="clock num" data-clock></span>
+        <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
+        <a class="icon-btn" href="dashboard.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+        <div class="user-chip"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>Reports</h2>
+          <p>Choose filters, check the preview, then download the report as CSV or print it as PDF.</p>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" id="repPrint"><i data-icon="printer"></i>Print / PDF</button>
+          <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i>Download CSV</button>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
+          <button class="btn btn-sm btn-ghost" type="button" id="repReset"><i data-icon="refresh"></i>Reset filters</button></div>
+        <form class="card-body report-filters" id="repForm" onsubmit="return false">
+          <div class="field"><label for="r-type">Report</label>
+            <select class="select" id="r-type" name="type">
+              <option value="summary">Condition summary (one row per motor)</option>
+              <option value="readings">Temperature readings (log)</option>
+            </select></div>
+          <div class="field"><label for="r-dev">Device</label><select class="select" id="r-dev" name="device"></select></div>
+          <div class="field"><label for="r-motor">Motor</label><select class="select" id="r-motor" name="motor"></select></div>
+          <div class="field"><label for="r-cond">Condition</label>
+            <select class="select" id="r-cond" name="cond">
+              <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option>
+            </select></div>
+          <div class="field rep-readings"><label for="r-range">Time range</label>
+            <select class="select" id="r-range" name="range">
+              <option value="15">Last 15 minutes</option><option value="30">Last 30 minutes</option><option value="60" selected>Last 1 hour</option><option value="all">Since monitoring started</option>
+            </select></div>
+          <div class="field rep-readings"><label for="r-int">Reading every</label>
+            <select class="select" id="r-int" name="interval">
+              <option value="1">1 minute</option><option value="5" selected>5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option>
+            </select></div>
+        </form>
+      </section>
+
+      <section class="card summary-strip" id="repSummary" aria-label="Report summary"></section>
+
+      <section class="card report-card">
+        <div class="card-head"><div><h3 id="repTitle">Preview</h3><div class="sub" id="repMeta"></div></div></div>
+        <div class="print-head" id="repPrintHead"></div>
+        <div class="table-wrap">
+          <table class="table responsive report-table">
+            <thead id="repHead"></thead>
+            <tbody id="repRows"></tbody>
+          </table>
+        </div>
+        <div class="card-foot muted" id="repFoot" style="font-size:12px"></div>
+      </section>
+    </main>
+  </div>
+</div>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
