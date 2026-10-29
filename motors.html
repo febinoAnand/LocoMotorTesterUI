@@ -51,7 +51,7 @@
       <div class="page-head">
         <div>
           <h2>Motor management</h2>
-          <p>Register traction motors and assign them to a device for monitoring · a device monitors up to 2 motors.</p>
+          <p>Register traction motors and assign them to a device for monitoring · a device checks up to 2 motors at a time, the rest wait in its queue.</p>
         </div>
         <div class="actions">
           <button class="btn btn-primary" type="button" data-add-motor=""><i data-icon="plus"></i>Add motor</button>
@@ -65,7 +65,7 @@
           <div class="input-icon grow"><i data-icon="search"></i><input class="input" id="motorSearch" type="search" placeholder="Search motor ID, model or locomotive" aria-label="Search motors"></div>
           <select class="select" id="motorDevFilter" aria-label="Filter by device" style="width:auto;min-width:180px"></select>
           <select class="select" id="motorCondFilter" aria-label="Filter by condition" style="width:auto;min-width:160px">
-            <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option><option value="none">Not monitored</option>
+            <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option><option value="wait">Queued</option><option value="none">Not monitored</option>
           </select>
           <span class="muted" id="motorCount" style="font-size:13px"></span>
         </div>
@@ -74,7 +74,7 @@
       <section class="card">
         <div class="table-wrap">
           <table class="table responsive motor-table">
-            <thead><tr><th>Motor</th><th>Model / type</th><th>Device</th><th class="num">Sensor 1</th><th class="num">Sensor 2</th><th class="num col-opt">Ambient</th><th class="num col-opt">Predicted final</th><th>Condition</th><th>Monitoring</th><th class="num">Actions</th></tr></thead>
+            <thead><tr><th>Motor</th><th>Model / type</th><th>Device</th><th class="num">T1 °C</th><th class="num">T2 °C</th><th class="num">T3 °C</th><th class="num">T4 °C</th><th class="num col-opt">TA °C</th><th class="num col-opt">Predicted final</th><th>Condition</th><th>Monitoring</th><th class="num">Actions</th></tr></thead>
             <tbody id="motorRows" aria-live="polite"></tbody>
           </table>
         </div>
