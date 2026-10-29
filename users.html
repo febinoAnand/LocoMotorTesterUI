@@ -21,9 +21,11 @@
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html" aria-current="page"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -93,7 +95,9 @@
         <div class="field"><label for="u-name">Full name</label><input class="input" id="u-name" name="name" required autofocus></div>
         <div class="field"><label for="u-user">Username</label><input class="input mono" id="u-user" name="username" required autocomplete="off"><span class="hint">Used to sign in</span></div>
         <div class="field"><label for="u-email">Email</label><input class="input" id="u-email" name="email" type="email" required></div>
-        <div class="field"><label for="u-role">Role</label><select class="select" id="u-role" name="role"></select></div>
+        <div class="field"><label for="u-role">Role</label><select class="select" id="u-role" name="role"></select>
+          <input class="input role-new" id="u-role-new" name="roleNew" maxlength="30" autocomplete="off" placeholder="Type the role name, e.g. Maintenance engineer" aria-label="New role name" hidden>
+          <span class="hint" id="roleHint">Pick a role, or choose “Enter a new role…” to type one</span></div>
         <div class="field"><label for="u-pw">Password</label><input class="input" id="u-pw" name="password" type="password" autocomplete="new-password"><span class="hint" id="pwHint">At least 6 characters.</span></div>
         <div class="field"><span class="label">Account</span><label class="check switch-row"><input type="checkbox" name="active" checked> Active (can sign in)</label></div>
       </div>
