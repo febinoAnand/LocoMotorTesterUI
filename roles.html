@@ -51,13 +51,15 @@
       <div class="page-head">
         <div>
           <h2>Roles &amp; permissions</h2>
-          <p>Choose what each role may do. Changes apply to everyone with that role as soon as you save.</p>
+          <p>Add, edit or delete roles and choose what each one may do · changes apply to everyone with that role.</p>
         </div>
         <div class="actions">
           <a class="btn" href="users.html"><i data-icon="users"></i>Manage users</a>
+          <button class="btn btn-primary" id="addRole" type="button"><i data-icon="plus"></i>Add role</button>
         </div>
       </div>
 
+      <div class="section-title"><h3>Roles</h3><span id="roleCount"></span></div>
       <section class="grid role-grid" id="roleCards" aria-label="Roles"></section>
 
       <section class="card">
@@ -71,7 +73,7 @@
         </div>
         <div class="table-wrap">
           <table class="table perm-table">
-            <thead><tr><th>Permission</th><th class="perm-col">Administrator</th><th class="perm-col">Supervisor</th><th class="perm-col">Operator</th><th class="perm-col">Viewer</th></tr></thead>
+            <thead><tr id="permHead"></tr></thead>
             <tbody id="permRows"></tbody>
           </table>
         </div>
@@ -79,6 +81,30 @@
     </main>
   </div>
 </div>
+<dialog class="modal" id="roleDialog" aria-labelledby="rTitle">
+  <form id="roleForm" novalidate style="display:contents">
+    <div class="modal-head">
+      <div><h3 id="rTitle">Add role</h3><p>Name the role and tick what people with it may do.</p></div>
+      <button type="button" class="icon-btn" aria-label="Close" onclick="this.closest('dialog').close()"><i data-icon="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-error" id="rfError" role="alert"></div>
+      <div class="form-grid">
+        <div class="field"><label for="r-name">Role name</label><input class="input" id="r-name" name="name" required maxlength="30" autocomplete="off" placeholder="e.g. Maintenance engineer"></div>
+        <div class="field"><label for="r-desc">Description</label><input class="input" id="r-desc" name="desc" maxlength="90" placeholder="What this role is for"></div>
+      </div>
+      <fieldset class="fieldset">
+        <legend>Permissions</legend>
+        <div class="perm-tools"><button type="button" class="link-btn" id="rAll">Select all</button><button type="button" class="link-btn" id="rNone">Clear</button></div>
+        <div id="rPerms" class="perm-rows"></div>
+      </fieldset>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="rSave">Add role</button>
+    </div>
+  </form>
+</dialog>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
