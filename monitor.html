@@ -21,9 +21,11 @@
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -51,7 +53,7 @@
       <div class="page-head">
         <div>
           <h2>Monitor</h2>
-          <p>Live widgets for every device · select a motor to see its full condition analysis below.</p>
+          <p>Live widgets for every device · click a motor to open its live view and full analysis.</p>
         </div>
         <div class="actions">
           <div class="segmented" role="radiogroup" aria-label="Show devices">
@@ -66,43 +68,6 @@
         <div class="grid grid-devices" id="monitorGrid"></div>
       </section>
 
-      <div class="section-title motor-detail" id="detailTitle"><h3>Selected motor</h3><span>Condition analysis · trend · equilibrium · comparison</span></div>
-
-      <section class="card motor-hero-card" id="motorHero" aria-live="polite"></section>
-
-      <section class="card motor-detail">
-        <div class="card-head">
-          <div><h3>Motor condition</h3><div class="sub">How the motor is heating, predicted from the readings so far</div></div>
-          <div id="condPill"></div>
-        </div>
-        <div class="cond-grid" id="condBody"></div>
-      </section>
-
-      <section class="card motor-detail">
-        <div class="card-head">
-          <div><h3>Temperature trend</h3><div class="sub">Since monitoring started · dashed lines = heating-model prediction · hover for readings</div></div>
-          <div class="toolbar">
-            <div class="legend" id="runLegend"></div>
-            <div class="segmented" role="radiogroup" aria-label="Show">
-              <input type="radio" name="trendMode" id="tm-temp" value="temp" checked><label for="tm-temp">Temperature</label>
-              <input type="radio" name="trendMode" id="tm-rise" value="rise"><label for="tm-rise">Rise<span class="hide-xs"> above ambient</span></label>
-            </div>
-          </div>
-        </div>
-        <div class="card-body"><div class="chart" id="runChart"></div></div>
-      </section>
-
-      <div class="grid grid-pair motor-detail">
-        <section class="card">
-          <div class="card-head"><div><h3>Thermal equilibrium</h3><div class="sub" id="eqMeta">Rate of change of the rise, per 10-minute interval</div></div>
-            <div class="legend"><span><i style="background:var(--series-1)"></i>Heating</span><span><i style="background:var(--ok)"></i>&lt; 2 K/h</span></div></div>
-          <div class="card-body" id="eqChart"></div>
-        </section>
-        <section class="card" id="cmpCard">
-          <div class="card-head"><div><h3>Compared with the other motor</h3><div class="sub" id="cmpSub"></div></div></div>
-          <div class="card-body"><div class="chart" id="cmpChart"></div></div>
-        </section>
-      </div>
     </main>
   </div>
 </div>

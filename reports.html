@@ -21,9 +21,11 @@
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -50,10 +52,12 @@
     <main class="content">
       <div class="page-head">
         <div>
+          <a class="back-link" id="repBack" href="monitor.html" hidden>&larr; Back</a>
           <h2>Reports</h2>
           <p>Choose filters, check the preview, then download the report as CSV or print it as PDF.</p>
         </div>
         <div class="actions">
+          <button class="btn" type="button" data-dl-all-motors title="Every motor's full report (details, aggregation, all readings) in one CSV"><i data-icon="download"></i>All motor reports</button>
           <button class="btn" type="button" id="repPrint"><i data-icon="printer"></i>Print / PDF</button>
           <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i>Download CSV</button>
         </div>
@@ -63,6 +67,22 @@
         <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
           <button class="btn btn-sm btn-ghost" type="button" id="repReset"><i data-icon="refresh"></i>Reset filters</button></div>
         <form class="card-body report-filters" id="repForm" onsubmit="return false">
+          <div class="field span-all"><label for="r-search">Search</label>
+            <div class="search-scope">
+              <select class="select" id="r-sin" name="sin" aria-label="Search in">
+                <option value="all">All fields</option>
+                <option value="test">Test ID</option>
+                <option value="motor">Motor ID</option>
+                <option value="stator" data-summary-only>Stator No.</option>
+                <option value="model" data-summary-only>Model / type</option>
+                <option value="loco" data-summary-only>Locomotive</option>
+                <option value="device">Device</option>
+                <option value="location" data-summary-only>Location</option>
+                <option value="reason" data-summary-only>Reason</option>
+                <option value="time" data-readings-only>Reading time</option>
+              </select>
+              <div class="input-icon"><i data-icon="search"></i>
+                <input class="input" id="r-search" name="search" type="search" autocomplete="off" placeholder="Search test ID, motor, stator no., model, locomotive, device, location or reason"></div></div></div>
           <div class="field"><label for="r-type">Report</label>
             <select class="select" id="r-type" name="type">
               <option value="summary">Condition summary (one row per motor)</option>
@@ -74,6 +94,17 @@
             <select class="select" id="r-cond" name="cond">
               <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option>
             </select></div>
+          <div class="field"><label for="r-ctype">Condition type</label>
+            <select class="select" id="r-ctype" name="ctype">
+              <option value="all">All condition types</option>
+              <option value="rise">Rise above ambient out of limits</option>
+              <option value="temp">Motor temperature out of limits</option>
+              <option value="spread">DE / NDE difference out of limits</option>
+              <option value="pred" data-summary-only>Predicted final rise too high</option>
+              <option value="partner" data-summary-only>Hotter than the other motor</option>
+              <option value="term">Terminal min / max exceeded</option>
+              <option value="probe" data-summary-only>Probe reading fault</option>
+            </select></div>
           <div class="field rep-readings"><label for="r-range">Time range</label>
             <select class="select" id="r-range" name="range">
               <option value="15">Last 15 minutes</option><option value="30">Last 30 minutes</option><option value="60" selected>Last 1 hour</option><option value="all">Since monitoring started</option>
@@ -82,6 +113,24 @@
             <select class="select" id="r-int" name="interval">
               <option value="1">1 minute</option><option value="5" selected>5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option>
             </select></div>
+          <div class="field span-all rules">
+            <div class="rules-head">
+              <div>
+                <div class="label">Custom rules</div>
+                <span class="hint">Narrow the report by temperature, condition or motor details · temperatures in °C, rise in K</span>
+              </div>
+              <div class="segmented" id="ruleModeBox" role="radiogroup" aria-label="Rows must match" hidden>
+                <input type="radio" name="ruleMode" id="rm-all" value="all" checked><label for="rm-all">Match all rules</label>
+                <input type="radio" name="ruleMode" id="rm-any" value="any"><label for="rm-any">Match any rule</label>
+              </div>
+            </div>
+            <div class="rule-chips" id="ruleChips" role="group" aria-label="Quick rules from the alarm limits"></div>
+            <div class="rule-rows" id="ruleRows"></div>
+            <div class="rule-actions">
+              <button class="btn btn-sm" type="button" id="ruleAdd"><i data-icon="plus"></i>Add rule</button>
+              <button class="btn btn-sm btn-ghost" type="button" id="ruleClear" hidden>Clear rules</button>
+            </div>
+          </div>
         </form>
       </section>
 

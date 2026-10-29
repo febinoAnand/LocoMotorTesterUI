@@ -21,9 +21,11 @@
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -51,7 +53,7 @@
       <div class="page-head">
         <div>
           <h2>Motor temperatures</h2>
-          <p>Live readings from every device · each motor has probes T1–T4 and ambient TA.</p>
+          <p>Live readings from every device · each device has 2 channels · each motor has DE and NDE sensors plus ambient TA.</p>
         </div>
         <div class="actions">
           <a class="btn" href="reports.html"><i data-icon="report"></i>Reports</a>
@@ -67,7 +69,7 @@
         <div class="card-head">
           <div><h3>Temperature rise above ambient</h3><div class="sub">Every motor, highest first · lines mark the warning and alarm limits</div></div>
           <div class="legend">
-            <span><i style="background:var(--series-1)"></i>T1</span><span><i style="background:var(--series-2)"></i>T2</span><span><i style="background:var(--series-3)"></i>T3</span><span><i style="background:var(--series-4)"></i>T4</span>
+            <span><i style="background:var(--series-1)"></i>DE</span><span><i style="background:var(--series-2)"></i>NDE</span>
           </div>
         </div>
         <div class="card-body" id="riseChart"></div>
