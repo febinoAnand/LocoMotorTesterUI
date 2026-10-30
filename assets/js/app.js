@@ -17,6 +17,7 @@
     alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
     xCircle: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    wifi: '<path d="M5 12.55a11 11 0 0 1 14 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>',
     wifiOff: '<path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2.1-1.6M2 8.8a15 15 0 0 1 4.2-2.6M22 8.8A15 15 0 0 0 10.7 5M12 20h.01"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
@@ -39,7 +40,13 @@
     bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     chevronRight: '<path d="m9 18 6-6-6-6"/>',
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    chevronUp: '<path d="m18 15-6-6-6 6"/>',
+    chevronDown: '<path d="m6 9 6 6 6-6"/>',
     sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
+    play: '<path d="M7 5v14l11-7z"/>',
+    minus: '<path d="M5 12h14"/>',
     pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',
     key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>'
   };
@@ -110,16 +117,25 @@
      they may not use are hidden (body.no-perm-<key>) and every
      action is checked again before it runs.
      ========================================================= */
-  const PERMISSIONS = [
-    { key: "view", label: "View dashboard, monitor & readings", locked: "all" },
-    { key: "trigger", label: "Start / stop motor monitoring" },
-    { key: "limits", label: "Edit alarm limits" },
-    { key: "reports", label: "Download & print reports" },
-    { key: "motors", label: "Manage motors (add, edit, assign, delete)" },
-    { key: "devices", label: "Manage devices" },
-    { key: "activity", label: "View activity log" },
-    { key: "users", label: "Manage users, roles & permissions", locked: "Administrator" }
+  /* Permissions are CRUD per area: "<area>.<action>". An area only lists the actions that exist
+     for it (e.g. reports can be viewed and created = downloaded / printed, never deleted). */
+  const ACTIONS = [["view", "View"], ["create", "Create"], ["update", "Update"], ["delete", "Delete"]];
+  const AREAS = [
+    { key: "monitor", label: "Dashboard & monitor", does: { view: "Live readings, dashboard and each motor's page" } },
+    { key: "monitoring", label: "Monitoring runs", does: { create: "Switch on a free channel", update: "Start / stop monitoring a motor" } },
+    { key: "motors", label: "Motors", does: { view: "Motors page", create: "Register motors", update: "Edit details, add details, assign to a device", delete: "Delete motors" } },
+    { key: "devices", label: "Devices", does: { view: "Devices page", create: "Add devices", update: "Edit devices", delete: "Delete devices, reset demo data" } },
+    { key: "limits", label: "Alarm & terminal limits", does: { view: "Settings page", update: "Change alarm and terminal limits" } },
+    { key: "reports", label: "Reports", does: { view: "Reports page", create: "Download and print reports" } },
+    { key: "activity", label: "Activity log", does: { view: "Activity log page" } },
+    { key: "users", label: "Users", does: { view: "Users page", create: "Add users", update: "Edit users, enable / disable accounts", delete: "Delete users" } },
+    { key: "roles", label: "Roles & permissions", does: { view: "Roles & permissions page", create: "Add roles", update: "Edit roles and their permissions", delete: "Delete roles" } }
   ];
+  const ACTION_LABEL = Object.fromEntries(ACTIONS);
+  const PERMISSIONS = AREAS.flatMap((a) => ACTIONS.filter(([k]) => a.does[k]).map(([k, l]) => ({ key: `${a.key}.${k}`, area: a.key, action: k, label: `${a.label} · ${l}`, locked: a.key === "monitor" ? "all" : undefined })));
+  const permLabel = (k) => (PERMISSIONS.find((p) => p.key === k) || { label: k }).label;
+  // create / update / delete need the area's page: they bring View with them
+  const withViews = (keys) => { const s = new Set(keys); keys.forEach((k) => { const v = k.split(".")[0] + ".view"; if (PERMISSIONS.some((p) => p.key === v)) s.add(v); }); return PERMISSIONS.map((p) => p.key).filter((k) => s.has(k)); };
   const ADMIN_ROLE = "Administrator";
   const DEFAULT_ROLES = [
     { name: "Administrator", desc: "Full access, including users and permissions" },
@@ -127,11 +143,18 @@
     { name: "Operator", desc: "Starts and stops monitoring runs and prints reports" },
     { name: "Viewer", desc: "Read-only access to live readings" }
   ];
+  const READ_ONLY = ["monitor.view", "motors.view", "devices.view", "limits.view", "reports.view"];
   const DEFAULT_GRANTS = {
     Administrator: PERMISSIONS.map((p) => p.key),
-    Supervisor: ["view", "trigger", "limits", "reports", "motors", "devices", "activity"],
-    Operator: ["view", "trigger", "reports"],
-    Viewer: ["view"]
+    Supervisor: PERMISSIONS.map((p) => p.key).filter((k) => !/^(users|roles)\./.test(k)),
+    Operator: [...READ_ONLY, "monitoring.create", "monitoring.update", "reports.create"],
+    Viewer: READ_ONLY
+  };
+  // permissions saved before CRUD (one switch per area) → the CRUD permissions they covered
+  const LEGACY_GRANTS = {
+    view: READ_ONLY, trigger: ["monitoring.create", "monitoring.update"], limits: ["limits.update"], reports: ["reports.create"],
+    motors: ["motors.create", "motors.update", "motors.delete"], devices: ["devices.create", "devices.update", "devices.delete"], activity: ["activity.view"],
+    users: ["users.view", "users.create", "users.update", "users.delete", "roles.view", "roles.create", "roles.update", "roles.delete"]
   };
   const DEFAULT_USERS = [
     { id: 1, name: "Arun Prakash", username: "admin", email: "arun.prakash@railshed.in", role: "Administrator", password: "admin", active: true, lastLogin: null },
@@ -140,29 +163,30 @@
     { id: 4, name: "Sunil Das", username: "sunil", email: "sunil.das@railshed.in", role: "Viewer", password: "sunil123", active: true, lastLogin: null },
     { id: 5, name: "Kavya Nair", username: "kavya", email: "kavya.nair@railshed.in", role: "Operator", password: "kavya123", active: false, lastLogin: null }
   ];
-  const USERS_KEY = "tt-users-v2", GRANTS_KEY = "tt-grants-v2", ROLES_KEY = "tt-roles-v1", SESSION_KEY = "tt-session";
+  const USERS_KEY = "tt-users-v2", GRANTS_KEY = "tt-grants-v3", OLD_GRANTS_KEY = "tt-grants-v2", ROLES_KEY = "tt-roles-v1", SESSION_KEY = "tt-session"; // v3: CRUD permissions
   let ROLES = store.get(ROLES_KEY, null) || JSON.parse(JSON.stringify(DEFAULT_ROLES));
   if (!ROLES.some((r) => r.name === ADMIN_ROLE)) ROLES.unshift(JSON.parse(JSON.stringify(DEFAULT_ROLES[0])));
   const saveRoles = () => store.set(ROLES_KEY, ROLES);
   let USERS = store.get(USERS_KEY, null) || JSON.parse(JSON.stringify(DEFAULT_USERS));
-  let GRANTS = { ...JSON.parse(JSON.stringify(DEFAULT_GRANTS)), ...store.get(GRANTS_KEY, {}) };
+  const oldGrants = store.get(GRANTS_KEY, null) ? {} : Object.fromEntries(Object.entries(store.get(OLD_GRANTS_KEY, {})).map(([r, keys]) => [r, withViews(keys.flatMap((k) => LEGACY_GRANTS[k] || []))]));
+  let GRANTS = { ...JSON.parse(JSON.stringify(DEFAULT_GRANTS)), ...oldGrants, ...store.get(GRANTS_KEY, {}) };
   const saveUsers = () => store.set(USERS_KEY, USERS);
   const saveGrants = () => store.set(GRANTS_KEY, GRANTS);
-  // locked permissions are always granted
+  if (Object.keys(oldGrants).length) saveGrants();
+  // Administrator has everything; locked permissions are always granted
   const grantsOf = (role) => (role === ADMIN_ROLE ? PERMISSIONS.map((p) => p.key)
-    : PERMISSIONS.filter((p) => p.locked === "all" || p.locked === role || (!p.locked && (GRANTS[role] || []).includes(p.key))).map((p) => p.key));
+    : withViews(PERMISSIONS.filter((p) => p.locked === "all" || (GRANTS[role] || []).includes(p.key)).map((p) => p.key)));
   const currentUser = () => USERS.find((u) => u.id === store.get(SESSION_KEY, null) && u.active) || null;
   const can = (perm) => { const u = currentUser(); return !!u && grantsOf(u.role).includes(perm); };
+  const isAdmin = () => (currentUser() || {}).role === ADMIN_ROLE;
   // guard an action: returns true when allowed, otherwise tells the user why not
   const allowed = (perm) => {
     if (can(perm)) return true;
-    const p = PERMISSIONS.find((x) => x.key === perm);
-    toast(`Your role does not allow: ${p ? p.label.toLowerCase() : perm}`);
-    logActivity("access", `Tried to ${p ? p.label.toLowerCase() : perm} — not allowed for this role`);
+    toast(`Your role does not allow: ${permLabel(perm)}`);
+    logActivity("access", `Tried: ${permLabel(perm)} — not allowed for this role`);
     return false;
   };
   const initials = (n) => String(n).trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-  // mark the page with what the user may NOT do, so CSS hides those controls everywhere
   /* ---------- Activity log ----------
      Every action is recorded with who did it and when (kept in this browser, newest
      2000 entries). The log is read-only: nothing in the app edits or clears it. */
@@ -175,8 +199,10 @@
     if (log.length > ACT_MAX) log.splice(0, log.length - ACT_MAX);
     store.set(ACT_KEY, log);
   }
+  // mark the page with what the user may NOT do, so CSS hides those controls everywhere
   function applyPerms() {
-    PERMISSIONS.forEach((p) => document.body.classList.toggle(`no-perm-${p.key}`, !can(p.key)));
+    PERMISSIONS.forEach((p) => document.body.classList.toggle(`no-perm-${p.key.replace(".", "-")}`, !can(p.key)));
+    document.body.classList.toggle("no-admin-nav", !["users.view", "roles.view", "activity.view"].some(can));
     const u = currentUser();
     $$(".user-chip").forEach((chip) => {
       if (!u) return;
@@ -187,8 +213,8 @@
 
   /* =========================================================
      Data model
-     Device → checks motors in turns: any number can be assigned, at most
-              MAX_RUN (2) are monitored at once; the others wait as "Queued".
+     Device → monitors at most MAX_RUN (2) motors at once, one per channel; a motor
+              can only be assigned while a channel is free.
               A finished check is switched off ("Stopped") and keeps its readings.
      Device → 2 channels; each channel checks one motor with 2 temperature
               sensors on it (DE drive end, NDE non-drive end) + 1 ambient (TA)
@@ -199,7 +225,7 @@
      temperature predicted by the heating model, and how it compares with
      the other motor on the same device. All limits are editable.
      ========================================================= */
-  const DEFAULT_LIMITS = { warn: 80, crit: 100, riseWarn: 25, riseCrit: 30, devWarn: 10, devCrit: 15, ambMax: 50, partnerWarn: 8, partnerCrit: 12 };
+  const DEFAULT_LIMITS = { warn: 80, crit: 100, riseWarn: 25, riseCrit: 30, devWarn: 10, devCrit: 15, partnerWarn: 8, partnerCrit: 12 };
   const LIMITS_KEY = "tt-limits-v3"; // v3: adds motor-to-motor comparison
   const LIMITS = { ...DEFAULT_LIMITS, ...store.get(LIMITS_KEY, {}) };
   const PROBES = ["DE", "NDE", "TA"]; // drive end, non-drive end, ambient
@@ -221,22 +247,20 @@
   const TREND_EVERY_MS = 60 * 1000;    // run trend chart: one point per minute
 
   const DEFAULT_DEVICES = [
-    { id: "TMU-01", name: "Device A", location: "Loco Shed · Bay 3", ip: "192.168.10.21", fw: "2.4.1", online: true, signal: 4, interval: 2,
+    { id: "TMU-01", name: "Device A", location: "Loco Shed · Bay 3", ip: "192.168.10.21", fw: "2.4.1", online: true, signal: 4,
       motors: [
         { id: "TM-4471", testId: "TEST-0001", stator: "ST-60681", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31245", base: [50, 53, 31], runMin: 95, tau: 12, channel: 1 },
-        { id: "TM-4472", testId: "TEST-0002", stator: "ST-60682", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31245", base: [57, 59, 32], runMin: 95, tau: 14, channel: 2 },
-        { id: "TM-4473", testId: "TEST-0007", stator: "ST-60683", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31246", base: [52, 54, 31], runMin: 0.5, tau: 12, active: false, queued: true }
+        { id: "TM-4472", testId: "TEST-0002", stator: "ST-60682", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31245", base: [57, 59, 32], runMin: 95, tau: 14, channel: 2 }
       ] },
-    { id: "TMU-02", name: "Device B", location: "Loco Shed · Bay 5", ip: "192.168.10.22", fw: "2.4.1", online: true, signal: 3, interval: 2,
+    { id: "TMU-02", name: "Device B", location: "Loco Shed · Bay 5", ip: "192.168.10.22", fw: "2.4.1", online: true, signal: 3,
       motors: [
         { id: "TM-3810", testId: "TEST-0003", stator: "ST-15251", model: "HS 15250A · 3-phase AC", loco: "WAP-7 #30412", base: [66, 69, 33], runMin: 62, tau: 15, channel: 1 },
         { id: "TM-3811", testId: "TEST-0004", stator: "ST-15252", model: "HS 15250A · 3-phase AC", loco: "WAP-7 #30412", base: [57, 59, 33], runMin: 62, tau: 15, channel: 2 },
-        { id: "TM-5121", testId: "TEST-0005", stator: "ST-65912", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [41, 53, 29], runMin: 70, tau: 10, active: false, channel: 1 },
-        { id: "TM-5120", testId: "TEST-0006", stator: "ST-65911", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [61, 63, 29], runMin: 0.5, tau: 30, active: false, queued: true }
+        { id: "TM-5121", testId: "TEST-0005", stator: "ST-65912", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [41, 53, 29], runMin: 70, tau: 10, active: false, channel: 1 }
       ] }
   ];
 
-  const DEV_KEY = "tt-devices-v6"; // v6: two devices, motors checked in turns (queue)
+  const DEV_KEY = "tt-devices-v6"; // v6: two devices, two channels each
   const MAX_RUN = 2; // channels per device = motors a device can check at the same time
   const CHANNELS = [1, 2];
   const isRunning = (m) => m.active !== false;
@@ -395,7 +419,7 @@
   const fmtRun = (min) => { const t = Math.max(0, Math.floor(min)); return t >= 60 ? `${Math.floor(t / 60)} h ${String(t % 60).padStart(2, "0")} min` : `${t} min`; };
 
   /* ---------- Evaluation (motor OK / not OK) ---------- */
-  const RANK = { wait: -2, stop: -1, ok: 0, warn: 1, crit: 2 };
+  const RANK = { stop: -1, ok: 0, warn: 1, crit: 2 };
   const lvl = (v, warn, crit) => (crit != null && v >= crit ? "crit" : warn != null && v >= warn ? "warn" : "ok");
   // L = limits to judge against (global by default, or a test's own limits)
   function evalMotor(m, L = LIMITS) {
@@ -429,25 +453,52 @@
     );
     checks.forEach((c) => { if (c.n != null) c.s = lvl(c.n, c.warn, c.crit); });
     const status = checks.reduce((w, c) => (RANK[c.s] > RANK[w] ? c.s : w), "ok");
-    return { hot, amb, rise, dev, th, stable: !!(th && th.eq), checks, status: m.queued ? "wait" : m.active === false ? "stop" : status, condition: status };
+    return { hot, amb, rise, dev, th, stable: !!(th && th.eq), checks, status: m.active === false ? "stop" : status, condition: status };
   }
   const allMotors = () => DEVICES.flatMap((d) => d.motors.map((m) => ({ d, m })));
   const liveMotors = () => allMotors().filter((x) => x.d.online && x.m.active !== false);
   // registered motors not assigned to any device (no readings until assigned)
-  const DEFAULT_SPARE = [{ id: "TM-6002", stator: "ST-60690", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31250" }];
+  const DEFAULT_SPARE = [
+    { id: "TM-4473", stator: "ST-60683", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31246" },
+    { id: "TM-5120", stator: "ST-65911", model: "TAO 659 · DC series", loco: "WAG-7 #27850" },
+    { id: "TM-6002", stator: "ST-60690", model: "6FRA 6068 · 3-phase AC", loco: "WAG-9 #31250" }
+  ];
   const SPARE_KEY = "tt-spare-v1";
   let SPARE = store.get(SPARE_KEY, null) || JSON.parse(JSON.stringify(DEFAULT_SPARE));
-  const saveSpare = () => store.set(SPARE_KEY, SPARE.map(({ id, stator, model, loco }) => ({ id, stator, model, loco })));
+  const saveSpare = () => store.set(SPARE_KEY, SPARE.map(({ id, stator, model, loco, tests }) => ({ id, stator, model, loco, tests: tests || [] })));
+  const spareOf = (m) => ({ id: m.id, stator: m.stator, model: m.model, loco: m.loco, tests: m.tests || [] });
   // motors saved before the stator number existed: take it from the sample data when the ID matches
   const DEFAULT_STATOR = Object.fromEntries([...DEFAULT_DEVICES.flatMap((d) => d.motors), ...DEFAULT_SPARE].map((m) => [m.id, m.stator]));
   [...DEVICES.flatMap((d) => d.motors), ...SPARE].forEach((m) => { if (!m.stator && DEFAULT_STATOR[m.id]) m.stator = DEFAULT_STATOR[m.id]; });
+  // motors saved while devices still had a queue go back to the not-assigned list
+  if (DEVICES.some((d) => d.motors.some((m) => m.queued))) {
+    DEVICES.forEach((d) => {
+      d.motors.filter((m) => m.queued).forEach((m) => SPARE.push(spareOf(m)));
+      d.motors = d.motors.filter((m) => !m.queued);
+    });
+    saveDevices(); saveSpare();
+  }
   const everyMotor = () => [...allMotors(), ...SPARE.map((m) => ({ d: null, m }))];
+  if (!store.get("tt-history-seeded", false)) {
+    const DAY = 86400000, at = (days, h) => Date.now() - days * DAY - h * 3600000;
+    const run = (testId, days, mins, device, channel, de, nde, rise, result) => ({ testId, device, channel, start: at(days, 3), end: at(days, 3) + mins * 60000, de, nde, rise, result });
+    const SEED = {
+      "TM-4471": [run("TEST-25-0412", 21, 110, "Device A", 1, 51.2, 54.0, 23.1, "ok"), run("TEST-25-0388", 48, 95, "Device B", 2, 58.9, 61.7, 29.4, "warn")],
+      "TM-3810": [run("TEST-25-0431", 14, 80, "Device B", 1, 66.0, 70.2, 37.0, "crit")],
+      "TM-6002": [run("TEST-25-0402", 30, 120, "Device A", 2, 49.0, 51.5, 20.4, "ok"), run("TEST-25-0350", 62, 100, "Device A", 1, 50.3, 52.8, 21.0, "ok")]
+    };
+    everyMotor().forEach(({ m }) => { if (SEED[m.id] && !(m.tests || []).length) m.tests = SEED[m.id]; });
+    store.set("tt-history-seeded", true);
+    if (allMotors().some(({ m }) => SEED[m.id])) store.set(DEV_KEY, DEVICES.map((d) => ({ ...d, motors: d.motors.map(({ live, hist, trend, runStart, _th, ...m }) => m) })));
+    store.set(SPARE_KEY, SPARE.map(({ id, stator, model, loco, tests }) => ({ id, stator, model, loco, tests: tests || [] })));
+  }
   /* Test ID: one per test run (a motor checked on a device). Given when the motor is
      assigned for test; a stopped test keeps its ID; restarting starts a new test. */
   const TEST_SEQ_KEY = "tt-test-seq";
   const DEFAULT_TEST = Object.fromEntries(DEFAULT_DEVICES.flatMap((d) => d.motors).map((m) => [m.id, m.testId]));
   const testNo = (t) => { const r = /^TEST-(\d+)$/i.exec(t || ""); return r ? +r[1] : 0; }; // only the app's own numbering counts; your own IDs don't move it
-  const nextTestId = () => "TEST-" + String(Math.max(store.get(TEST_SEQ_KEY, 0), ...allMotors().map(({ m }) => testNo(m.testId))) + 1).padStart(4, "0");
+  // never repeats a number used now or in any motor's test history
+  const nextTestId = () => "TEST-" + String(Math.max(store.get(TEST_SEQ_KEY, 0), ...everyMotor().flatMap(({ m }) => [testNo(m.testId), ...(m.tests || []).map((r) => testNo(r.testId))])) + 1).padStart(4, "0");
   const useTestId = (t) => { store.set(TEST_SEQ_KEY, Math.max(store.get(TEST_SEQ_KEY, 0), testNo(t))); return t; };
   // a free, well-formed Test ID, or an error message
   const checkTestId = (raw, self) => {
@@ -455,6 +506,8 @@
     if (!t) return { err: "Test ID is required." };
     if (!/^[A-Z0-9][A-Z0-9-]{2,23}$/.test(t)) return { err: "Test ID: 3–24 letters, numbers or dashes." };
     const other = allMotors().find(({ m }) => m !== self && (m.testId || "").toUpperCase() === t);
+    const past = everyMotor().find(({ m }) => (m.tests || []).some((r) => r.testId.toUpperCase() === t));
+    if (past) return { err: `Test ID ${t} was already used for ${past.m.id}.` };
     return other ? { err: `Test ID ${t} is already used by ${other.m.id}.` } : { t };
   };
   // motors saved before test IDs existed
@@ -477,8 +530,7 @@
     warn: { label: "Warning", icon: "alert" },
     crit: { label: "Over limit", icon: "xCircle" },
     off: { label: "Offline", icon: "wifiOff" },
-    stop: { label: "Stopped", icon: "pause" },
-    wait: { label: "Queued", icon: "clock" }
+    stop: { label: "Stopped", icon: "pause" }
   };
   const badge = (s, label) => `<span class="badge ${s}">${ico(STATUS[s].icon)}${esc(label || STATUS[s].label)}</span>`;
   // device connection status, as shown in the Devices table and the device form
@@ -574,13 +626,14 @@
 
   // Register / edit a motor's details. preset = { id } to edit, { device } when opened from a device's "Assign motor"
   function motorDialog(preset = {}) {
-    if (!allowed("motors")) return;
+    if (!allowed(preset.id ? "motors.update" : "motors.create")) return;
     const cur = preset.id ? findMotor(preset.id) : null;
     const editing = cur && cur.m;
+    const fresh = editing && editing.untitled; // switched on without a motor: details are entered for the first time
     const target = !editing && preset.device ? DEVICES.find((x) => x.id === preset.device) || null : null;
     const d = makeDialog("motorDialog", `
       <form id="motorForm" novalidate style="display:contents">
-        ${dlgHead(editing ? `Edit motor ${editing.id}` : "Add motor", editing ? "Update the motor details." : "Register a traction motor with its stator number.")}
+        ${dlgHead(fresh ? "Add motor details" : editing ? `Edit motor ${editing.id}` : "Add motor", fresh ? `Readings are already being recorded under ${editing.id}${cur.d ? ` on ${cur.d.name} ${chLabel(editing)}` : ""} · they stay with the motor.` : editing ? "Update the motor details." : "Register a traction motor with its stator number.")}
         <div class="modal-body">
           <div class="form-error" id="mfError" role="alert"></div>
           <div class="form-grid">
@@ -590,13 +643,13 @@
             <div class="field"><label for="mf-loco">Locomotive</label><input class="input" id="mf-loco" name="loco" placeholder="WAG-9 #31245"></div>
           </div>
           ${target ? `<div class="form-grid" style="margin-top:14px">${testIdField("mf-test", nextTestId())}</div>` : ""}
-          ${target ? `<p class="form-note">${ico("cpu")}Will be assigned to <b>${esc(target.name)}</b>${runningOn(target).length >= MAX_RUN ? " and queued (2 motors are being checked)" : " and checked straight away"}.</p>` : ""}
+          ${target ? `<p class="form-note">${ico("cpu")}Will be assigned to <b>${esc(target.name)}</b> and checked straight away on CH ${freeChannel(target)}.</p>` : ""}
         </div>
-        <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">${editing ? "Save changes" : "Add motor"}</button></div>
+        <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">${fresh ? "Save details" : editing ? "Save changes" : "Add motor"}</button></div>
       </form>`);
     const f = d.querySelector("#motorForm"), err = d.querySelector("#mfError");
     const clean = (v) => (v === "—" ? "" : v || "");
-    if (editing) { f.elements.id.value = editing.id; f.elements.stator.value = clean(editing.stator); f.elements.model.value = clean(editing.model); f.elements.loco.value = clean(editing.loco); }
+    if (editing) { f.elements.id.value = fresh ? "" : editing.id; f.elements.stator.value = clean(editing.stator); f.elements.model.value = clean(editing.model); f.elements.loco.value = clean(editing.loco); }
     f.addEventListener("submit", (e) => {
       e.preventDefault();
       const id = f.elements.id.value.trim().toUpperCase(), stator = f.elements.stator.value.trim().toUpperCase();
@@ -608,34 +661,41 @@
       if (other) return fail(`Stator No. ${stator} is already registered to ${other.m.id}.`);
       const tid = target ? checkTestId(f.elements.testId.value, null) : {};
       if (tid.err) return fail(tid.err);
+      if (target && !freeChannel(target)) return fail(`Both channels on ${target.name} are in use — switch one off first.`);
       const info = { id, stator, model: f.elements.model.value.trim() || "—", loco: f.elements.loco.value.trim() || "—" };
       const LBL = { id: "ID", stator: "stator no.", model: "model", loco: "locomotive" };
       const changes = editing ? Object.keys(LBL).filter((k) => (editing[k] || "—") !== info[k]).map((k) => `${LBL[k]} ${editing[k] || "—"} → ${info[k]}`) : [];
-      if (editing) Object.assign(editing, info);
+      const oldId = editing && editing.id;
+      if (editing) { Object.assign(editing, info); delete editing.untitled; }
       else attachMotor({ ...info }, target, tid.t);
       saveDevices(); saveSpare();
       d.close();
       const mm = target && target.motors.find((x) => x.id === id);
-      logActivity(target ? "test" : "motor", editing ? `Edited motor ${id}${changes.length ? ` — ${changes.join(", ")}` : " — no changes"}`
-        : target ? `Registered motor ${id} (stator ${stator}) and assigned it to ${target.name} for test ${tid.t}${mm && mm.queued ? " · queued" : ` · checking started on ${chLabel(mm)}`}` : `Registered motor ${id} (stator ${stator}) · not assigned`);
-      toast(editing ? `${id} updated` : target ? `${id} added to ${target.name} · ${tid.t}${mm && mm.queued ? " · queued" : " · checking now"}` : `${id} registered — assign it to a device to start checking`);
+      logActivity(target ? "test" : "motor", fresh ? `Added details for ${oldId} — now motor ${id} (stator ${stator}) · test ${editing.testId || "—"}`
+        : editing ? `Edited motor ${id}${changes.length ? ` — ${changes.join(", ")}` : " — no changes"}`
+        : target ? `Registered motor ${id} (stator ${stator}) and assigned it to ${target.name} for test ${tid.t} · checking started on ${chLabel(mm)}` : `Registered motor ${id} (stator ${stator}) · not assigned`);
+      toast(fresh ? `Details saved · now ${id}` : editing ? `${id} updated` : target ? `${id} added to ${target.name} · ${tid.t} · checking now` :`${id} registered — assign it to a device to start checking`);
+      // the motor page is addressed by motor ID: follow a renamed motor there
+      if (oldId && oldId !== id && document.body.dataset.page === "motor") { location.replace(`motor.html?motor=${encodeURIComponent(id)}`); return; }
       rerender();
     });
     d.showModal();
   }
+  // a device checks at most MAX_RUN motors: explain why nothing more can start on it
+  const channelsFull = (d) => confirmDialog({ title: `Both channels on ${d.name} are in use`, message: `${runningOn(d).map((x) => `${x.id} (${chLabel(x)})`).join(" and ")} are being checked now. Switch one of them off, then try again.`, confirmLabel: "OK", danger: false });
   // Assign a motor to a device, move it to another one, or take it off
   // "Assign motor" on a device: search the registered motors and put one on test there
   function pickMotorDialog(deviceId) {
-    if (!allowed("motors")) return;
+    if (!allowed("motors.update")) return;
     const target = DEVICES.find((x) => x.id === deviceId);
     if (!target) return motorDialog({});
-    const busy = runningOn(target).length >= MAX_RUN;
-    const where = ({ d, m }) => !d ? "Not assigned" : `On ${d.name} · ${isRunning(m) ? `${chLabel(m)} · checking now` : m.queued ? "queued" : "stopped"}`;
-    const order = ({ d, m }) => (!d ? 0 : !isRunning(m) && !m.queued ? 1 : m.queued ? 2 : 3); // free motors first
+    if (!freeChannel(target)) { channelsFull(target); return; }
+    const where = ({ d, m }) => !d ? "Not assigned" : `On ${d.name} · ${isRunning(m) ? `${chLabel(m)} · checking now` : "stopped"}`;
+    const order = ({ d, m }) => (!d ? 0 : !isRunning(m) ? 1 : 2); // free motors first
     const pool = () => everyMotor().filter(({ d }) => d !== target).sort((a, b) => order(a) - order(b) || a.m.id.localeCompare(b.m.id));
     const dlg = makeDialog("pickDialog", `
       <form id="pickForm" novalidate style="display:contents">
-        ${dlgHead(`Assign a motor to ${target.name}`, busy ? `Both channels on ${target.name} are in use — the motor you pick will be queued.` : `Pick the motor to test · checking starts straight away on CH ${freeChannel(target)}.`)}
+        ${dlgHead(`Assign a motor to ${target.name}`, `Pick the motor to test · checking starts straight away on CH ${freeChannel(target)}.`)}
         <div class="modal-body">
           <div class="form-error" id="pkError" role="alert"></div>
           <div class="pick-test">${testIdField("pk-test", nextTestId())}</div>
@@ -645,7 +705,7 @@
           <div class="pick-count muted" id="pkCount"></div>
           <ul class="pick-list" id="pkList" role="listbox" aria-label="Motors"></ul>
         </div>
-        <div class="modal-foot"><button type="button" class="btn btn-ghost" id="pkNew" style="margin-right:auto">${ico("plus")}Register new motor</button><button type="button" class="btn" data-close>Cancel</button></div>
+        <div class="modal-foot">${can("motors.create") ? `<button type="button" class="btn btn-ghost" id="pkNew" style="margin-right:auto">${ico("plus")}Register new motor</button>` : ""}<button type="button" class="btn" data-close>Cancel</button></div>
       </form>`);
     const list = dlg.querySelector("#pkList"), search = dlg.querySelector("#pk-search");
     const draw = () => {
@@ -659,7 +719,7 @@
           <span class="pick-where${x.d ? (isRunning(x.m) ? " busy" : "") : " free"}">${esc(where(x))}${x.d && x.m.testId ? ` · ${esc(x.m.testId)}` : ""}</span>
           <span class="pick-go">Assign ${ico("chevronRight")}</span>
         </button></li>`).join("")
-        : `<li class="pick-empty">${all.length ? `No motors match “${esc(search.value.trim())}”.` : "No other motors are registered yet."} <button type="button" class="link-btn" data-new>Register a new motor</button></li>`;
+        : `<li class="pick-empty">${all.length ? `No motors match “${esc(search.value.trim())}”.` : "No other motors are registered yet."}${can("motors.create") ? ` <button type="button" class="link-btn" data-new>Register a new motor</button>` : ""}</li>`;
     };
     const assign = async (id) => {
       const cur = findMotor(id); if (!cur) return;
@@ -670,15 +730,15 @@
       detachMotor(cur); attachMotor(cur.m, target, tid.t);
       saveDevices(); saveSpare();
       const mm = target.motors.find((x) => x.id === id);
-      logActivity("test", `Assigned ${id} to ${target.name} for test ${tid.t}${cur.d ? ` (moved from ${cur.d.name})` : ""}${mm && mm.queued ? " · queued" : ` · checking started on ${chLabel(mm)}`}`);
-      toast(`${id} assigned to ${target.name} · ${tid.t}${mm && mm.queued ? " · queued" : " · checking now"}`);
+      logActivity("test", `Assigned ${id} to ${target.name} for test ${tid.t}${cur.d ? ` (moved from ${cur.d.name})` : ""} · checking started on ${chLabel(mm)}`);
+      toast(`${id} assigned to ${target.name} · ${tid.t} · checking now`);
       rerender();
     };
     list.addEventListener("click", (ev) => {
       if (ev.target.closest("[data-new]")) { dlg.close(); motorDialog({ device: target.id }); return; }
       const b = ev.target.closest("[data-pick]"); if (b) assign(b.dataset.pick);
     });
-    dlg.querySelector("#pkNew").addEventListener("click", () => { dlg.close(); motorDialog({ device: target.id }); });
+    dlg.querySelector("#pkNew")?.addEventListener("click", () => { dlg.close(); motorDialog({ device: target.id }); });
     search.addEventListener("input", draw);
     dlg.querySelector("#pickForm").addEventListener("submit", (ev) => { ev.preventDefault(); const first = list.querySelector("[data-pick]"); if (first) assign(first.dataset.pick); }); // Enter picks the top match
     dlg.querySelector("#pk-test").addEventListener("input", () => dlg.querySelector("#pkError").classList.remove("show"));
@@ -688,12 +748,12 @@
   }
 
   function assignDialog(id) {
-    if (!allowed("motors")) return;
+    if (!allowed("motors.update")) return;
     const cur = findMotor(id);
     if (!cur) return;
     const opts = DEVICES.map((x) => {
       const busy = runningOn(x).filter((m) => m !== cur.m).length >= MAX_RUN;
-      return `<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.id)})${busy && x !== cur.d ? " — will be queued" : ""}</option>`;
+      return `<option value="${esc(x.id)}"${busy && x !== cur.d ? " disabled" : ""}>${esc(x.name)} (${esc(x.id)})${busy && x !== cur.d ? " — both channels in use" : ""}</option>`;
     }).join("");
     const d = makeDialog("assignDialog", `
       <form id="assignForm" novalidate style="display:contents">
@@ -701,14 +761,14 @@
         <div class="modal-body">
           <div class="field"><label for="as-dev">Device</label>
             <select class="select" id="as-dev" name="device"><option value="">Not assigned</option>${opts}</select>
-            <span class="hint">A device checks up to ${MAX_RUN} motors at a time · others wait in its queue</span></div>
+            <span class="hint">A device checks up to ${MAX_RUN} motors at a time · switch one off to free a channel</span></div>
           <div class="form-error" id="asError" role="alert" style="margin-top:12px"></div>
           <div id="asTest" style="margin-top:12px">${testIdField("as-test", nextTestId())}</div>
         </div>
         <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
       </form>`);
     const f = d.querySelector("#assignForm"), dev = f.elements.device;
-    dev.value = cur.d ? cur.d.id : (DEVICES.find((x) => runningOn(x).length < MAX_RUN) || DEVICES[0] || {}).id || "";
+    dev.value = cur.d ? cur.d.id : (DEVICES.find((x) => runningOn(x).length < MAX_RUN) || {}).id || "";
     // a Test ID is only needed when the motor goes onto a (different) device
     const syncTest = () => { d.querySelector("#asTest").hidden = !dev.value || (cur.d && dev.value === cur.d.id); };
     dev.addEventListener("change", syncTest); syncTest();
@@ -717,39 +777,64 @@
       const target = DEVICES.find((x) => x.id === dev.value) || null;
       if (target === cur.d) { d.close(); return; }
       const tid = target ? checkTestId(f.elements.testId.value, cur.m) : {};
-      if (tid.err) { const er = d.querySelector("#asError"); er.textContent = tid.err; er.classList.add("show"); return; }
+      const full = target && !freeChannel(target) && `Both channels on ${target.name} are in use — switch one off first.`;
+      if (tid.err || full) { const er = d.querySelector("#asError"); er.textContent = tid.err || full; er.classList.add("show"); return; }
       d.close();
       const oldTest = cur.m.testId;
       detachMotor(cur); attachMotor(cur.m, target, tid.t);
       if (!target) delete cur.m.testId;
-      const qd = target && target.motors.find((x) => x.id === cur.m.id);
-      logActivity("test", target ? `Assigned ${cur.m.id} to ${target.name} for test ${tid.t}${cur.d ? ` (moved from ${cur.d.name})` : ""}${qd && qd.queued ? " · queued" : ` · checking started on ${chLabel(qd)}`}` : `Unassigned ${cur.m.id} from ${cur.d.name}${oldTest ? ` (test ${oldTest} ended)` : ""}`);
+      logActivity("test", target ? `Assigned ${cur.m.id} to ${target.name} for test ${tid.t}${cur.d ? ` (moved from ${cur.d.name})` : ""} · checking started on ${chLabel(cur.m)}` : `Unassigned ${cur.m.id} from ${cur.d.name}${oldTest ? ` (test ${oldTest} ended)` : ""}`);
       saveDevices(); saveSpare();
-      const mm = target && target.motors.find((x) => x.id === cur.m.id);
-      toast(target ? `${cur.m.id} assigned to ${target.name} · ${tid.t}${mm && mm.queued ? " · queued" : " · checking now"}` : `${cur.m.id} is no longer assigned`);
+      toast(target ? `${cur.m.id} assigned to ${target.name} · ${tid.t} · checking now` : `${cur.m.id} is no longer assigned`);
       rerender();
     });
     d.showModal();
   }
-  // take a motor off its device (or out of the unassigned list)
+  // highest readings of the current run
+  const runPeak = (m) => { const pts = trendPoints(m), max = (j) => Math.max(...pts.map((p) => p.v[j])); return { de: max(0), nde: max(1), rise: Math.max(...pts.map((p) => hotOf(p.v) - p.v[AMB])) }; };
+  // a motor (same stator) can be tested many times: when a run ends for good it goes into the motor's test history
+  function archiveRun(m, d) {
+    if (!m.testId || !m.trend || !m.trend.length || !m.runStart) return;
+    const pk = runPeak(m);
+    (m.tests = m.tests || []).unshift({ testId: m.testId, device: d ? d.name : "—", channel: m.channel || null, start: m.runStart, end: m.stoppedAt || Date.now(),
+      de: +pk.de.toFixed(1), nde: +pk.nde.toFixed(1), rise: +pk.rise.toFixed(1), result: evalMotor(m).condition });
+    if (m.tests.length > 50) m.tests.length = 50;
+  }
+  // take a motor off its device (or out of the unassigned list); its run so far is kept in its history
   function detachMotor({ d, m }) {
-    if (d) d.motors = d.motors.filter((x) => x !== m);
+    if (d) { archiveRun(m, d); d.motors = d.motors.filter((x) => x !== m); }
     else SPARE = SPARE.filter((x) => x !== m);
   }
-  // put a motor on a device (checking starts now if a position is free, otherwise it is queued) or into the unassigned list
+  // put a motor on a device (checking starts now on its free channel — callers check there is one) or into the unassigned list
   function attachMotor(m, d, testId) {
-    if (!d) { SPARE.push({ id: m.id, stator: m.stator, model: m.model, loco: m.loco }); return; }
+    if (!d) { SPARE.push(spareOf(m)); return; }
     m.testId = useTestId(testId || nextTestId());
     const p = Math.round(44 + Math.random() * 10), ch = freeChannel(d);
-    delete m.slot; delete m.stoppedAt; delete m.channel; // a new test on this device
-    Object.assign(m, { base: [p, p + 2, Math.round(28 + Math.random() * 4)], runMin: 0.5, tau: 12, active: !!ch, queued: !ch });
-    if (ch) m.channel = ch;
+    delete m.slot; delete m.stoppedAt; delete m.queued; // a new test on this device
+    Object.assign(m, { base: [p, p + 2, Math.round(28 + Math.random() * 4)], runMin: 0.5, tau: 12, active: true, channel: ch });
     seedMotor(m);
     d.motors.push(m);
   }
 
+  // "Switch on" a free channel without picking a motor: readings start at once under a temporary ID,
+  // the motor's details are added later (motorDialog clears the "untitled" flag)
+  const NEW_ID = "NEW-";
+  const nextNewId = () => { let n = 1; while (everyMotor().some(({ m }) => m.id === NEW_ID + String(n).padStart(3, "0"))) n++; return NEW_ID + String(n).padStart(3, "0"); };
+  function quickStart(deviceId) {
+    if (!allowed("monitoring.create")) return;
+    const d = DEVICES.find((x) => x.id === deviceId); if (!d) return;
+    if (!d.online) { toast(`${d.name} is offline`); return; }
+    if (!freeChannel(d)) { channelsFull(d); return; }
+    const m = { id: nextNewId(), stator: "", model: "—", loco: "—", untitled: true };
+    attachMotor(m, d, nextTestId());
+    saveDevices();
+    logActivity("test", `Switched on ${d.name} ${chLabel(m)} without a motor selected · temporary ID ${m.id} · test ${m.testId}`);
+    toast(`${d.name} ${chLabel(m)} on · ${m.testId} — add the motor details any time`);
+    rerender();
+  }
+
   async function deleteMotor(id) {
-    if (!allowed("motors")) return;
+    if (!allowed("motors.delete")) return;
     const x = findMotor(id);
     if (!x) return;
     const ok = await confirmDialog({ title: `Delete motor ${x.m.id}?`, message: x.d ? `It will be removed from ${x.d.name} and will no longer be monitored. This cannot be undone.` : "It will be removed from the motor register. This cannot be undone.", confirmLabel: "Delete motor" });
@@ -761,6 +846,10 @@
     rerender();
   }
 
+  const testsText = (m, d) => {
+    const n = (m.tests || []).length + (d && m.testId ? 1 : 0), last = (m.tests || [])[0];
+    return n ? `${n} test${n === 1 ? "" : "s"}${d && m.testId ? ` · now <span class="mono">${esc(m.testId)}</span>` : ""}${last ? ` · last finished <span class="mono">${esc(last.testId)}</span> (${VERDICT_SHORT[last.result] || "—"})` : ""}` : "Not tested yet";
+  };
   function viewMotor(id) {
     const x = findMotor(id);
     if (!x) return;
@@ -770,16 +859,16 @@
       title: m.id, sub: d ? `${d.name} · ${d.location}` : "Not assigned to a device",
       hero: d ? readings(m, d.online) : "",
       rows: [["Condition", d ? verdictPill(d.online ? e.status : "off") : `<span class="verdict-pill off">Not monitored</span>`], ["Stator No.", `<span class="mono">${esc(m.stator || "—")}</span>`], ["Model / type", esc(m.model)], ["Locomotive", esc(m.loco)],
-        ["Device", d ? `${esc(d.name)} (${esc(d.id)})` : "Not assigned"], ...(d ? [["Monitoring for", fmtRun(runMinutes(m))], ["Predicted final", e.th && e.th.confident ? `${e.th.finalTemp.toFixed(1)} °C` : "Collecting data"]] : [])],
-      actions: `<button type="button" class="btn btn-danger" data-v-del>${ico("trash")}Delete</button><button type="button" class="btn" data-v-edit>${ico("edit")}Edit</button>${d ? `<a class="btn btn-primary" href="motor.html?motor=${encodeURIComponent(m.id)}">${ico("activity")}Monitor</a>` : ""}`
+        ["Device", d ? `${esc(d.name)} (${esc(d.id)})` : "Not assigned"], ["Tests", testsText(m, d)], ...(d ? [["Monitoring for", fmtRun(runMinutes(m))], ["Predicted final", e.th && e.th.confident ? `${e.th.finalTemp.toFixed(1)} °C` : "Collecting data"]] : [])],
+      actions: `${can("motors.delete") ? `<button type="button" class="btn btn-danger" data-v-del>${ico("trash")}Delete</button>` : ""}${can("motors.update") ? `<button type="button" class="btn" data-v-edit>${ico("edit")}Edit</button>` : ""}${d ? `<a class="btn btn-primary" href="motor.html?motor=${encodeURIComponent(m.id)}">${ico("activity")}Monitor</a>` : ""}`
     });
-    dlg.querySelector("[data-v-edit]").addEventListener("click", () => { dlg.close(); motorDialog({ id: m.id }); });
-    dlg.querySelector("[data-v-del]").addEventListener("click", () => { dlg.close(); deleteMotor(m.id); });
+    dlg.querySelector("[data-v-edit]")?.addEventListener("click", () => { dlg.close(); motorDialog({ id: m.id }); });
+    dlg.querySelector("[data-v-del]")?.addEventListener("click", () => { dlg.close(); deleteMotor(m.id); });
   }
 
   // Update thresholds (persisted)
   function limitsDialog() {
-    if (!allowed("limits")) return;
+    if (!allowed("limits.update")) return;
     const F = [
       ["riseWarn", "Rise above ambient — warning", "K"], ["riseCrit", "Rise above ambient — alarm", "K"],
       ["warn", "Motor temperature — warning", "°C"], ["crit", "Motor temperature — alarm", "°C"],
@@ -815,12 +904,10 @@
       d.close();
       logActivity("limits", `Saved alarm limits${changes.length ? ` — ${changes.join("; ")}` : " — no changes"}`);
       toast("Thresholds saved");
-      paintLimitText();
       rerender();
     });
     d.showModal();
   }
-  const paintLimitText = () => $$("[data-limit]").forEach((el) => (el.textContent = LIMITS[el.dataset.limit]));
 
   // delegated CRUD buttons usable on any page
   document.addEventListener("click", (e) => {
@@ -837,13 +924,15 @@
     if (vw) viewMotor(vw.dataset.viewMotor);
     if (e.target.closest("[data-dl-all-motors]")) downloadAllMotorReports();
     if (e.target.closest("[data-edit-limits]")) limitsDialog();
+    const qs = e.target.closest("[data-quick-start]");
+    if (qs && !qs.disabled) quickStart(qs.dataset.quickStart);
     const tg = e.target.closest("[data-trigger]");
     if (tg && !tg.disabled) toggleMonitoring(tg.dataset.trigger);
   });
   /* =========================================================
      Readings, Dashboard and Motors pages
      ========================================================= */
-  const VERDICT_SHORT = { ok: "Good", warn: "Monitor", crit: "Not OK", off: "Offline", stop: "Stopped", wait: "Queued" };
+  const VERDICT_SHORT = { ok: "Good", warn: "Monitor", crit: "Not OK", off: "Offline", stop: "Stopped" };
   // monitoring on/off switch for one motor
   const triggerBtn = (m, d) => {
     const on = m.active !== false;
@@ -851,21 +940,17 @@
       title="${on ? "Monitoring on — click to stop" : "Monitoring off — click to start a new run"}"><i></i><span>${on ? "On" : "Off"}</span></button>`;
   };
   async function toggleMonitoring(id) {
-    if (!allowed("trigger")) return;
+    if (!allowed("monitoring.update")) return;
     const x = findMotor(id); if (!x || !x.d) return;
     const { d, m } = x, on = m.active !== false;
     if (!d.online) { toast(`${d.name} is offline`); return; }
-    const busy = runningOn(d).filter((x) => x !== m);
-    if (!on && busy.length >= MAX_RUN) {
-      await confirmDialog({ title: `Both channels on ${d.name} are in use`, message: `${busy.map((x) => `${x.id} (${chLabel(x)})`).join(" and ")} are being checked now. Stop one of them when its check is finished, then start ${m.id}.`, confirmLabel: "OK", danger: false });
-      return;
-    }
+    if (!on && !freeChannel(d, m)) { await channelsFull(d); return; }
     const ok = await confirmDialog(on
-      ? { title: `Stop monitoring ${m.id}?`, message: `Readings stop and the last values and result are kept. Alarms for this motor are paused.${d.motors.some((x) => x.queued) ? " The position is then free for the next queued motor." : ""}`, confirmLabel: "Stop monitoring" }
-      : { title: `Start monitoring ${m.id}?`, message: `${m.queued ? `Test ${m.testId} starts now` : `A new test ${nextTestId()} starts now (${m.testId} stays with its last results)`}: readings, trend and heating analysis begin from zero.`, confirmLabel: "Start monitoring", danger: false });
+      ? { title: `Stop monitoring ${m.id}?`, message: "Readings stop and the last values and result are kept. Alarms for this motor are paused and its channel is free again.", confirmLabel: "Stop monitoring" }
+      : { title: `Start monitoring ${m.id}?`, message: `A new test ${nextTestId()} starts now (${m.testId} and its results go into this motor's test history): readings, trend and heating analysis begin from zero.`, confirmLabel: "Start monitoring", danger: false });
     if (!ok) return;
     if (on) { m.active = false; m.stoppedAt = Date.now(); }
-    else { if (!m.queued || !m.testId) m.testId = useTestId(nextTestId()); m.channel = freeChannel(d, m); m.active = true; m.queued = false; delete m.stoppedAt; m.runMin = 0.05; seedMotor(m); }
+    else { archiveRun(m, d); m.testId = useTestId(nextTestId()); m.channel = freeChannel(d, m); m.active = true; delete m.stoppedAt; m.runMin = 0.05; seedMotor(m); }
     saveDevices();
     logActivity("test", on ? `Stopped monitoring ${m.id} on ${d.name} ${chLabel(m)} · test ${m.testId} · last result ${VERDICT_SHORT[evalMotor(m).condition]}` : `Started monitoring ${m.id} on ${d.name} ${chLabel(m)} · test ${m.testId}`);
     toast(on ? `${m.id} monitoring stopped · ${m.testId}` : `${m.id} monitoring started · ${m.testId}`);
@@ -890,7 +975,7 @@
       <div class="reading${j === AMB ? " amb" : ""}" style="--probe:${COLORS[j]}">
         <span class="r-label"><i class="probe-key"></i>${PROBES[j]}${live ? '<i class="sample-dot" aria-hidden="true"></i>' : ""}<small>${PROBE_NAME[PROBES[j]]}</small></span>
         <b class="r-value num ${online ? tCls(v, j, amb) : "muted"}"${online ? ` data-anim="${esc(m.id)}:${size}:${j}" data-v="${v}"` : ""}><span class="nv">${online ? v.toFixed(1) : "—"}</span><small>°C</small></b>
-        <span class="r-sub num">${j === AMB ? "&nbsp;" : online ? `Rise ${(v - amb).toFixed(1)} K` : ""}</span>
+        <span class="r-sub num">${j === AMB ? "Ambient air" : online ? `Rise ${(v - amb).toFixed(1)} K` : ""}</span>
       </div>`).join("")}</div>`;
   }
   const signalBars = (n) => `<span class="signal" aria-label="Signal ${n} of 4">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
@@ -1073,38 +1158,41 @@
     const e = evalMotor(m);
     return `
       <div class="motor-panel is-${e.status}${selected ? " is-selected" : ""}" data-pick-motor="${esc(m.id)}">
-        <div class="motor-panel-head">
-          <div><span class="slot"><b class="ch-tag">${chLabel(m)}</b> ${esc(m.loco)}</span><b>${esc(m.id)}</b><span class="test-tag" title="Test ID">${esc(m.testId || "—")}</span></div>
-          <div class="mp-actions">${verdictPill(e.status)}${triggerBtn(m, d)}</div>
+        <div class="mp-head">
+          <div class="mp-id"><b class="ch-tag">${chLabel(m)}</b><b class="mp-name mono">${esc(m.id)}</b></div>
+          ${verdictPill(e.status)}
+          <div class="mp-meta">${m.untitled ? "Details pending" : esc(m.loco)} · <span class="mono" title="Test ID">${esc(m.testId || "—")}</span></div>
+          ${triggerBtn(m, d)}
         </div>
-        ${readings(m)}
+        ${m.untitled ? `<div class="panel-note">${ico("edit")}<span>Reading without motor details</span><button type="button" class="btn btn-sm btn-primary" data-edit-motor="${esc(m.id)}">Add details</button></div>` : ""}
+        ${readings(m, true, "panel")}
         <div class="panel-trend" title="Hotter of DE / NDE since monitoring started · dashed = alarm level">
           <span>Trend</span>${sparkRun(m, e.status)}
         </div>
         ${e.status === "stop" ? `<div class="panel-heat stopped">${ico("pause")}<div class="ph-text"><span>Monitoring stopped${m.stoppedAt ? " at " + new Date(m.stoppedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span><b>Last readings shown</b><small>Switch on to start a new run</small></div><a href="motor.html?motor=${encodeURIComponent(m.id)}">Details →</a></div>` : `<div class="panel-heat">
-          ${progressRing(e.th && e.th.confident ? e.th.sensors[e.th.hot].pct : null, e.status === "ok" ? "var(--series-1)" : `var(--${e.status})`, e.th && e.th.confident ? `${Math.round(e.th.sensors[e.th.hot].pct * 100)}%` : "—", "heated", 58)}
+          ${progressRing(e.th && e.th.confident ? e.th.sensors[e.th.hot].pct : null, e.status === "ok" ? "var(--series-1)" : `var(--${e.status})`, e.th && e.th.confident ? `${Math.round(e.th.sensors[e.th.hot].pct * 100)}%` : "—", "heated", 50)}
           <div class="ph-text">
             <span>${trendText(e)}</span>
-            <b class="num">${e.th && e.th.confident ? `Final ≈ ${e.th.finalTemp.toFixed(1)} °C` : "Final: collecting data"}</b>
+            <b class="num">${e.th && e.th.confident ? `Final ≈ ${e.th.finalTemp.toFixed(1)} °C` : "Final: collecting data…"}</b>
             <small class="num">${e.th && e.th.confident ? (e.th.alarmIn != null && e.rise < LIMITS.riseCrit ? `Alarm in about ${fmtMin(e.th.alarmIn)}` : e.th.eq ? "Equilibrium reached" : e.th.eqIn < 1 ? "Settling" : `Equilibrium in about ${fmtMin(e.th.eqIn)}`) : "&nbsp;"}</small>
           </div>
           <a href="motor.html?motor=${encodeURIComponent(m.id)}">Details →</a>
         </div>`}
       </div>`;
   }
-  const emptySlot = (d) => {
-    const q = d.motors.filter((m) => m.queued).length;
-    return `
+  const emptySlot = (d) => `
     <div class="empty-slot">
-      <div>${ico("plus")}<div><b>Channel ${freeChannel(d)} is free</b></div><div>${q ? `Start a waiting motor from the <a href="motors.html?device=${encodeURIComponent(d.id)}">Motors</a> page, or assign another` : runningOn(d).length ? "Assign a second motor to check both under the same conditions" : "Assign a motor to start checking"}</div>
-      <button type="button" class="btn btn-sm" style="margin-top:10px" data-add-motor="${esc(d.id)}">Assign motor</button></div>
+      <div>${ico("plus")}<div><b>Channel ${freeChannel(d)} is free</b></div><div>Switch on to read temperatures now and add the motor details later, or assign a registered motor</div>
+      <div class="slot-btns">
+        <button type="button" class="btn btn-sm btn-primary slot-on" data-quick-start="${esc(d.id)}">${ico("power")}Switch on</button>
+        <button type="button" class="btn btn-sm" data-add-motor="${esc(d.id)}">Assign motor</button>
+      </div></div>
     </div>`;
-  };
   // motors on a device whose check was stopped: last readings / result kept, can be switched on again
   function deviceStopped(d, selectedId) {
-    const done = d.motors.filter((m) => !isRunning(m) && !m.queued);
+    const done = d.motors.filter((m) => !isRunning(m));
     if (!done.length) return "";
-    return `<div class="dev-queue">
+    return `<div class="dev-stopped">
       <div class="dq-head"><b>Stopped motors on ${esc(d.name)}</b><span>${done.length} stopped · ${runningOn(d).length} of ${MAX_RUN} channels in use</span></div>
       <ul>${done.map((m) => {
         const e = evalMotor(m);
@@ -1122,7 +1210,7 @@
     const head = `
       <div class="card-head">
         <div class="device-title"><div class="device-ico">${ico("cpu")}</div><div><h3>${esc(d.name)}</h3><div class="sub">${esc(d.id)} · ${esc(d.location)}</div></div></div>
-        ${d.online ? `<span class="badge ok"><span class="pulse"></span>Online</span>` : badge("off")}
+        <div class="mp-actions">${d.online ? `<button type="button" class="btn btn-sm btn-primary slot-on" data-quick-start="${esc(d.id)}" title="${freeChannel(d) ? `Start reading on CH ${freeChannel(d)} now · add the motor details later` : "Both channels are in use — switch one off first"}">${ico("power")}Switch on</button><span class="badge ok"><span class="pulse"></span>Online</span>` : badge("off")}</div>
       </div>`;
     if (!d.online) return `<div class="${cls}">${head}<div class="offline-mask">${ico("wifiOff")}<b>Device offline</b><div>Last seen ${esc(d.lastSeen || "—")}</div></div></div>`;
     const cells = runningOn(d).map((m) => motorPanel(d, m, m.id === selectedId));
@@ -1140,7 +1228,7 @@
       const c = { ok: 0, warn: 0, crit: 0 };
       evals.forEach((x) => c[x.e.status]++);
       $("#summary").innerHTML = `
-        <div><span>Motors monitored</span><b class="num">${evals.length}<small> on ${online} of ${DEVICES.length} devices${allMotors().some((x) => x.m.queued) ? ` · ${allMotors().filter((x) => x.m.queued).length} queued` : ""}</small></b></div>
+        <div><span>Motors monitored</span><b class="num">${evals.length}<small> on ${online} of ${DEVICES.length} devices</small></b></div>
         <div><span style="color:var(--ok-text)">${ico("checkCircle")}Good</span><b class="num">${c.ok}</b></div>
         <div><span style="color:var(--warn-text)">${ico("alert")}Monitor</span><b class="num">${c.warn}</b></div>
         <div><span style="color:var(--crit-text)">${ico("xCircle")}Not OK</span><b class="num">${c.crit}</b></div>
@@ -1171,11 +1259,22 @@
     let filter = "all";
     // arriving from Devices (monitor.html?device=ID): bring that device into view and outline it for a moment
     let target = DEVICES.some((d) => d.id === q.get("device")) ? q.get("device") : null;
+    // 3D view: one device at a time, picked with its tabs
+    const scene = motorScene($("#scene"), { details: false, fixed: true }); // overview: devices and motors only, one constant view
+    let sceneDev = target || (DEVICES.find((d) => d.online && runningOn(d).length) || DEVICES[0] || {}).id || null;
+    const renderScene = () => {
+      if (!DEVICES.some((d) => d.id === sceneDev)) sceneDev = (DEVICES[0] || {}).id || null;
+      $("#sceneCard").hidden = !sceneDev;
+      $("#sceneTabs").innerHTML = DEVICES.map((d) => `<button type="button" class="role-tab${d.id === sceneDev ? " on" : ""}" data-scene-dev="${esc(d.id)}" aria-pressed="${d.id === sceneDev}">${esc(d.name)}<small>${runningOn(d).length}/${MAX_RUN}</small></button>`).join("");
+      if (scene.device !== sceneDev) scene.show(sceneDev); else scene.refresh();
+    };
+    $("#sceneTabs").addEventListener("click", (e) => { const b = e.target.closest("[data-scene-dev]"); if (b) { sceneDev = b.dataset.sceneDev; renderScene(); } });
     const render = () => {
-      const devs = DEVICES.filter((d) => filter === "all" || (filter === "online" ? d.online : d.online && d.motors.some((m) => ["warn", "crit"].includes(evalMotor(m).status))));
+      const devs = DEVICES.filter((d) => filter === "all" || d.online);
       $("#monitorGrid").innerHTML = devs.length ? devs.map((d) => deviceWidget(d, null, d.id === target)).join("")
         : DEVICES.length ? `<div class="card card-body muted">No devices match this filter.</div>`
         : `<div class="card empty-state">${ico("cpu")}<h3>No devices yet</h3><p>Register a device, then assign motors to it.</p><a class="btn btn-primary" href="devices.html">${ico("plus")}Add device</a></div>`;
+      renderScene();
       updateAlertCount();
     };
     // click a motor widget (anywhere but its switch) to open the motor's own page
@@ -1195,70 +1294,398 @@
     return render;
   }
 
-  /* ---------- Motor animation (motor page) ----------
-     Side view of the motor with its end face: the rotor spins while the motor is
-     checked, the housing shifts from cool to hot with the rise above ambient, heat
-     shimmer rises when warm, and DE / NDE / TA show their live values where they sit. */
-  const PROBE_AT = [[290, 192], [128, 120]]; // DE near the drive end (shaft side), NDE at the far end
-  function motorSvg() {
-    const fins = Array.from({ length: 11 }, (_, i) => `<rect x="${130 + i * 27}" y="80" width="9" height="152" rx="2" class="ma-fin"/>`).join("");
-    const spokes = Array.from({ length: 8 }, (_, i) => `<path d="M0 -12 L-7 -54 Q0 -60 7 -54 Z" transform="rotate(${i * 45})" class="ma-blade"/>`).join("");
-    const probes = PROBE_AT.map(([x, y], j) => `
-      <g class="ma-probe" id="maP${j}" style="--probe:${COLORS[j]}">
-        <circle cx="${x}" cy="${y}" r="13" class="ma-ping"/>
-        <circle cx="${x}" cy="${y}" r="7" class="ma-dot"/>
-        <g transform="translate(${x + 14} ${y - 15})"><rect width="124" height="30" rx="8" class="ma-tag"/>
-          <text x="10" y="20" class="ma-tag-k">${PROBES[j]}</text><text x="115" y="20" text-anchor="end" class="ma-tag-v" id="maV${j}">—</text></g>
-      </g>`).join("");
-    return `<svg viewBox="0 0 640 300" role="img" aria-labelledby="maTitle" class="ma-svg">
-      <title id="maTitle">Motor live view</title>
-      <defs>
-        <linearGradient id="maShell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="ma-s1"/><stop offset=".5" class="ma-s2"/><stop offset="1" class="ma-s3"/></linearGradient>
-        <clipPath id="maClip"><rect x="110" y="80" width="320" height="152" rx="30"/></clipPath>
-      </defs>
-      <ellipse cx="340" cy="272" rx="250" ry="12" class="ma-shadow"/>
-      <g class="ma-shimmer" id="maShimmer">
-        <path d="M185 70 q10 -14 0 -28 t0 -28"/><path d="M275 70 q10 -14 0 -28 t0 -28"/><path d="M365 70 q10 -14 0 -28 t0 -28"/>
-      </g>
-      <rect x="150" y="228" width="60" height="34" rx="4" class="ma-foot"/><rect x="330" y="228" width="60" height="34" rx="4" class="ma-foot"/>
-      <rect x="200" y="46" width="96" height="38" rx="6" class="ma-box"/><text x="248" y="70" text-anchor="middle" class="ma-box-t">TERMINAL BOX</text>
-      <rect x="110" y="80" width="320" height="152" rx="30" fill="url(#maShell)" class="ma-shell"/>
-      <g clip-path="url(#maClip)">${fins}<rect x="110" y="80" width="320" height="152" id="maHeat" class="ma-heat"/></g>
-      <rect x="570" y="146" width="62" height="20" rx="4" class="ma-shaft"/>
-      <g class="ma-flow" id="maFlow"><path d="M578 106 H618"/><path d="M584 206 H624"/><path d="M572 126 H608"/></g>
-      <circle cx="500" cy="156" r="76" class="ma-end"/>
-      <circle cx="500" cy="156" r="61" class="ma-end-in"/>
-      <g transform="translate(500 156)"><g class="ma-rotor" id="maRotor">${spokes}<circle r="14" class="ma-hub"/><circle r="4" class="ma-axle"/></g></g>
-      ${probes}
-      <g class="ma-amb" id="maAmb" transform="translate(28 30)">
-        <path d="M14 46V10a8 8 0 0 1 16 0v36a14 14 0 1 1-16 0Z" class="ma-thermo"/><circle cx="22" cy="57" r="8" class="ma-thermo-b"/>
-        <text x="46" y="30" class="ma-amb-k">TA · ambient air</text><text x="46" y="56" class="ma-amb-v" id="maTA">—</text>
-      </g>
-      <text x="500" y="290" text-anchor="middle" class="ma-state" id="maState"></text>
-    </svg>`;
-  }
-  function paintMotor(d, m, e) {
-    const wrap = $("#motorAnim"); if (!wrap) return;
-    const live = d.online && !m.queued, running = live && isRunning(m);
-    const frac = Math.max(0, Math.min(1, e.rise / LIMITS.riseCrit));
-    const hue = Math.round(210 - 210 * frac); // blue (cool) → red (at the alarm rise)
-    wrap.classList.toggle("is-running", running);
-    wrap.classList.toggle("is-hot", running && frac >= 0.6);
-    const heat = $("#maHeat");
-    heat.style.fill = live ? `hsl(${hue} 85% 52%)` : "var(--muted)";
-    heat.style.opacity = live ? (0.12 + 0.5 * frac).toFixed(2) : 0.08;
-    $("#maShimmer").style.opacity = running ? Math.max(0, (frac - 0.35) * 1.5).toFixed(2) : 0;
-    MS.forEach((j) => {
-      const g = $(`#maP${j}`), v = m.live[j];
-      $(`#maV${j}`).textContent = live ? `${v.toFixed(1)} °C` : "—";
-      g.classList.toggle("out", live && (outOfRange(v, j) || tCls(v, j, m.live[AMB]) === "t-crit"));
-      g.classList.toggle("warn", live && tCls(v, j, m.live[AMB]) === "t-warn");
-      if (running) { g.classList.remove("ping"); void g.getBBox(); g.classList.add("ping"); } // a ripple per new sample
+  /* ---------- 3D view (Monitor page and each motor's page) ----------
+     One device and the motors on its channels, drawn by a small canvas renderer (no library):
+     flat-shaded faces sorted back to front. Drag to turn the camera. While a motor is checked
+     its fan spins and pulses run along its cable; the housing colour follows the rise above
+     ambient (cool steel → amber → red at the alarm limit). Labels are HTML pinned to 3D points. */
+  // details: Wi-Fi / probe / TA labels and motor details with leader lines; fixed: the camera doesn't turn
+  function motorScene(el, { details = true, fixed = false } = {}) {
+    const cv = document.createElement("canvas"), tags = document.createElement("div");
+    tags.className = "scene-tags";
+    el.prepend(cv, tags);
+    const ctx = cv.getContext("2d");
+    const cam = { yaw: 0.78, pitch: 0.62, zoom: 1, auto: false }; // one fixed view: high in the front-right corner, looking down at the equipment
+    // no 360°: the camera stays in front of the device, from its left side round to its right side
+    const YAW_MAX = 1.57, clampYaw = (y) => Math.max(-YAW_MAX, Math.min(YAW_MAX, Math.atan2(Math.sin(y), Math.cos(y))));
+    const TARGET = [0, 14, 2];
+    let intro = 1; // one constant view: no fly-in
+    let devId = null, focusId = null, solo = false, leds = {}, slots = [], W = 0, H = 0, dpr = 1, last = performance.now(), visible = true, theme = null, themeAt = 0;
+    let anchors = []; // 3D point for each label, same order as the label elements
+
+    // vectors
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const unit = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+    const mix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+    const LIGHT = unit([-0.45, 1, 0.65]);
+    const rgb = (c, k = 1, a = 1) => `rgba(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)},${a})`;
+    const parse = (s, fb) => { s = (s || "").trim(); let m = /^#([0-9a-f]{6})$/i.exec(s); if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)); m = /rgba?\(([^)]+)\)/.exec(s); return m ? m[1].split(",").slice(0, 3).map(Number) : fb; };
+    const COL = { body: [44, 56, 78], screen: [12, 22, 30], port: [24, 28, 36], steel: [176, 184, 194], foot: [72, 80, 92], base: [96, 104, 116], cowl: [64, 72, 84], blade: [30, 34, 42], cable: [58, 66, 80], tb: [80, 90, 104], ok: [12, 163, 12], warn: [250, 178, 25], crit: [208, 59, 59], stop: [140, 148, 160], de: [42, 120, 214], nde: [235, 104, 52] };
+    const STATUS_C = { ok: COL.ok, warn: COL.warn, crit: COL.crit, stop: COL.stop, off: COL.stop };
+    // housing colour from the rise above ambient (grey when not being checked)
+    const heat = (m, on) => {
+      if (!on) return [150, 156, 166];
+      const rise = hotOf(m.live) - m.live[AMB], w = LIMITS.riseWarn, c = LIMITS.riseCrit;
+      if (rise < w) return mix([92, 122, 158], [190, 170, 110], Math.max(0, (rise - w * 0.5) / (w * 0.5)));
+      return mix([214, 160, 60], [214, 66, 52], Math.min(1, (rise - w) / Math.max(1, c - w)));
+    };
+
+    // ----- meshes: faces { p: points, n: outward normal, c: colour, bias, paint } -----
+    const face = (p, n, c, extra) => ({ p, n, c, ...extra });
+    function box(x, y, z, w, h, d, c, out) {
+      const X = [x - w / 2, x + w / 2], Y = [y - h / 2, y + h / 2], Z = [z - d / 2, z + d / 2], P = (i, j, k) => [X[i], Y[j], Z[k]];
+      out.push(face([P(0, 0, 1), P(1, 0, 1), P(1, 1, 1), P(0, 1, 1)], [0, 0, 1], c), face([P(1, 0, 0), P(0, 0, 0), P(0, 1, 0), P(1, 1, 0)], [0, 0, -1], c),
+        face([P(1, 0, 1), P(1, 0, 0), P(1, 1, 0), P(1, 1, 1)], [1, 0, 0], c), face([P(0, 0, 0), P(0, 0, 1), P(0, 1, 1), P(0, 1, 0)], [-1, 0, 0], c),
+        face([P(0, 1, 1), P(1, 1, 1), P(1, 1, 0), P(0, 1, 0)], [0, 1, 0], c), face([P(0, 0, 0), P(1, 0, 0), P(1, 0, 1), P(0, 0, 1)], [0, -1, 0], c));
+    }
+    // cylinder along x between a and b; fins = raised rings for the cooling fins
+    function cyl(a, b, y, z, r, c, out, fins = 0, sides = 18) {
+      const x0 = Math.min(a, b), x1 = Math.max(a, b), segs = fins ? fins * 2 + 1 : 1, step = (x1 - x0) / segs;
+      const rad = (s) => (fins && s % 2 ? r * 1.09 : r);
+      const pt = (x, rr, k) => { const t = (k / sides) * Math.PI * 2; return [x, y + rr * Math.cos(t), z + rr * Math.sin(t)]; };
+      for (let s = 0; s < segs; s++) {
+        const xa = x0 + s * step, xb = xa + step, rr = rad(s);
+        for (let k = 0; k < sides; k++) { const t = ((k + 0.5) / sides) * Math.PI * 2; out.push(face([pt(xa, rr, k), pt(xb, rr, k), pt(xb, rr, k + 1), pt(xa, rr, k + 1)], [0, Math.cos(t), Math.sin(t)], c)); }
+        if (s < segs - 1) { const r2 = rad(s + 1), nx = r2 > rr ? -1 : 1; for (let k = 0; k < sides; k++) out.push(face([pt(xb, rr, k), pt(xb, r2, k), pt(xb, r2, k + 1), pt(xb, rr, k + 1)], [nx, 0, 0], c)); }
+      }
+      out.push(face(Array.from({ length: sides }, (_, k) => pt(x0, rad(0), k)), [-1, 0, 0], c), face(Array.from({ length: sides }, (_, k) => pt(x1, rad(segs - 1), k)), [1, 0, 0], c));
+    }
+    // cylinder along z between a and b (the motors lie with their shaft towards the viewer)
+    function cylZ(a, b, x, y, r, c, out, fins = 0, sides = 18) {
+      const z0 = Math.min(a, b), z1 = Math.max(a, b), segs = fins ? fins * 2 + 1 : 1, step = (z1 - z0) / segs;
+      const rad = (s) => (fins && s % 2 ? r * 1.09 : r);
+      const pt = (z, rr, k) => { const t = (k / sides) * Math.PI * 2; return [x + rr * Math.cos(t), y + rr * Math.sin(t), z]; };
+      for (let s = 0; s < segs; s++) {
+        const za = z0 + s * step, zb = za + step, rr = rad(s);
+        for (let k = 0; k < sides; k++) { const t = ((k + 0.5) / sides) * Math.PI * 2; out.push(face([pt(za, rr, k), pt(zb, rr, k), pt(zb, rr, k + 1), pt(za, rr, k + 1)], [Math.cos(t), Math.sin(t), 0], c)); }
+        if (s < segs - 1) { const r2 = rad(s + 1), nz = r2 > rr ? -1 : 1; for (let k = 0; k < sides; k++) out.push(face([pt(zb, rr, k), pt(zb, r2, k), pt(zb, r2, k + 1), pt(zb, rr, k + 1)], [0, 0, nz], c)); }
+      }
+      out.push(face(Array.from({ length: sides }, (_, k) => pt(z0, rad(0), k)), [0, 0, -1], c), face(Array.from({ length: sides }, (_, k) => pt(z1, rad(segs - 1), k)), [0, 0, 1], c));
+    }
+    const R = 13, MY = 8 + R, L = 46; // motor radius, axis height, length
+    // the two channels side by side in a straight line; each motor's shaft (drive end) points at the viewer, fan end towards the device
+    const SLOT = { 1: { x: -38, z: 26, out: -1 }, 2: { x: 38, z: 26, out: 1 } };
+    // a probe on top of the housing: DE (j = 0) near the shaft, NDE (j = 1) near the fan
+    const probeAt = (ch, j) => [SLOT[ch].x, MY + R + 3, SLOT[ch].z + (j === 0 ? 1 : -1) * (L / 2 - 7)];
+    // the device's 5 terminals: 2 per motor (DE, NDE) and 1 for the ambient sensor
+    const TERMS = [{ ch: 1, j: 0, x: -24, label: "1 DE" }, { ch: 1, j: 1, x: -12, label: "1 NDE" }, { ta: true, x: 0, label: "TA" }, { ch: 2, j: 1, x: 12, label: "2 NDE" }, { ch: 2, j: 0, x: 24, label: "2 DE" }];
+    const termAt = (t) => [t.x, 10, -28];
+    const ANT_TIP = [26, 60.5, -48], TA_AT = [-41.5, 29.5, -42];
+    const shown = () => (solo ? slots.map((x) => x.ch) : CHANNELS);
+
+    function motorMesh(s, t, out) {
+      const { x, z } = SLOT[s.ch], m = s.m, c = heat(m, s.on);
+      const zF = z + L / 2, zB = z - L / 2, zC = zB - 7; // drive end (front), fan end (back), fan cowl
+      box(x, 1, z, 36, 2, 64, COL.base, out);
+      box(x, 5, z - 14, 26, 8, 7, COL.foot, out); box(x, 5, z + 14, 26, 8, 7, COL.foot, out);
+      cylZ(zB, zF, x, MY, R, c, out, 5);
+      cylZ(zC, zB, x, MY, R * 1.02, COL.cowl, out);
+      cylZ(zF, zF + 13, x, MY, 2.6, COL.steel, out, 0, 10); // shaft, towards the viewer
+      const ka = s.fan * 0.8; box(x + 2.5 * Math.cos(ka), MY + 2.5 * Math.sin(ka), zF + 8, 1.5, 1.5, 8, COL.blade, out); // shaft key
+      box(x, MY + R + 4, z, 13, 8, 13, COL.tb, out); // terminal box
+      const de = probeAt(s.ch, 0), nde = probeAt(s.ch, 1);
+      box(de[0], de[1] - 1.4, de[2], 4, 3, 4, COL.de, out); box(nde[0], nde[1] - 1.4, nde[2], 4, 3, 4, COL.nde, out);
+      // fan blades behind the cowl, turning while the motor is checked
+      const zc = zC - 0.4;
+      for (let i = 0; i < 7; i++) {
+        const a = s.fan + (i * Math.PI * 2) / 7, p = (rr, da) => [x + rr * Math.cos(a + da), MY + rr * Math.sin(a + da), zc];
+        out.push(face([p(3, -0.22), p(R * 0.86, -0.12), p(R * 0.86, 0.12), p(3, 0.22)], [0, 0, -1], COL.blade, { bias: 1 }));
+      }
+    }
+    function deviceMesh(d, t, out) {
+      box(0, 22, -42, 66, 44, 26, COL.body, out);
+      box(26, 51, -48, 2, 14, 2, COL.foot, out); box(26, 58.5, -48, 3.4, 3, 3.4, COL.crit, out); // antenna
+      box(-37, 40, -42, 9, 2, 3, COL.foot, out); box(-41.5, 35, -42, 3, 10, 3, COL.steel, out); // TA sensor in the air beside the device
+      const fz = -28.7;
+      // screen: live temperature per channel, drawn on the face itself
+      out.push(face([[-26, 25, fz], [26, 25, fz], [26, 40, fz], [-26, 40, fz]], [0, 0, 1], COL.screen, { bias: 1, paint: screenText }));
+      // terminal names under the screen
+      out.push(face([[-31, 17.5, fz], [31, 17.5, fz], [31, 21.5, fz], [-31, 21.5, fz]], [0, 0, 1], COL.body, { bias: 1, paint: termText }));
+      // the 5 terminals, each with a status light: its channel's condition, or the ambient sensor
+      TERMS.forEach((tm) => {
+        box(tm.x, 10, -28, 6, 5, 2, COL.port, out);
+        const st = tm.ta ? (d.online ? "amb" : null) : leds[tm.ch], lc = st === "amb" ? [138, 143, 152] : st ? STATUS_C[st] : [70, 78, 92];
+        const blink = st && st !== "off" ? 0.75 + 0.25 * Math.sin(t / 220 + tm.x) : 1;
+        out.push(face([[tm.x - 1.8, 14, fz], [tm.x + 1.8, 14, fz], [tm.x + 1.8, 16.4, fz], [tm.x - 1.8, 16.4, fz]], [0, 0, 1], lc.map((v) => v * blink), { bias: 1, glow: !!st }));
+      });
+    }
+    function termText(pp) {
+      const [p0, p1, , p3] = pp, Wd = 124, Hd = 8;
+      ctx.save();
+      ctx.setTransform(dpr * (p1.x - p0.x) / Wd, dpr * (p1.y - p0.y) / Wd, dpr * (p0.x - p3.x) / Hd, dpr * (p0.y - p3.y) / Hd, dpr * p3.x, dpr * p3.y);
+      ctx.font = "700 4.2px system-ui, sans-serif"; ctx.fillStyle = "rgba(226,232,240,.9)"; ctx.textAlign = "center";
+      TERMS.forEach((tm) => ctx.fillText(tm.label, ((tm.x + 31) / 62) * Wd, 6));
+      ctx.restore();
+    }
+    // device screen text, mapped onto the projected screen with an affine transform
+    function screenText(pp) {
+      const [p0, p1, , p3] = pp, Wd = 104, Hd = 30; // p0 bottom-left, p1 bottom-right, p3 top-left
+      ctx.save();
+      ctx.setTransform(dpr * (p1.x - p0.x) / Wd, dpr * (p1.y - p0.y) / Wd, dpr * (p0.x - p3.x) / Hd, dpr * (p0.y - p3.y) / Hd, dpr * p3.x, dpr * p3.y);
+      ctx.font = "700 7px ui-monospace, Consolas, monospace"; ctx.fillStyle = "#3ee07a";
+      shown().forEach((ch, i) => {
+        const s = slots.find((x) => x.ch === ch);
+        ctx.fillText(s ? `CH${ch} ${s.m.id.slice(0, 9).padEnd(9)} ${hotOf(s.m.live).toFixed(1)}°` : `CH${ch} free`, 5, 11 + i * 11);
+      });
+      ctx.restore();
+    }
+
+    // ----- camera & projection -----
+    function camera() {
+      const k = 1 - Math.pow(1 - intro, 3), yaw = cam.yaw - (1 - k) * 0.7, pitch = cam.pitch + (1 - k) * 0.35; // fly-in: wider and higher, easing in
+      const D = Math.max(170, (92 * H * 0.92) / (0.45 * W)) / (cam.zoom * (solo ? 1.02 : 1) * (0.55 + 0.45 * k)); // a single motor is shown closer
+      const pos = [TARGET[0] + D * Math.sin(yaw) * Math.cos(pitch), TARGET[1] + D * Math.sin(pitch), TARGET[2] + D * Math.cos(yaw) * Math.cos(pitch)];
+      const f = unit(sub(TARGET, pos)), r = unit(cross(f, [0, 1, 0])), u = cross(r, f), F = H * 0.92; // a slightly wide lens
+      return { pos, project: (p) => { const v = sub(p, pos), z = dot(v, f); return { x: W / 2 + (dot(v, r) * F) / z, y: H / 2 - (dot(v, u) * F) / z, z }; } };
+    }
+    const path = (pp) => { ctx.beginPath(); pp.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); };
+
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1); W = el.clientWidth; H = el.clientHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    }
+    function readTheme() {
+      const cs = getComputedStyle(document.documentElement);
+      theme = { wifi: parse(cs.getPropertyValue("--primary"), [31, 95, 191]), focus: cs.getPropertyValue("--primary").trim() || "#1f5fbf", floor: parse(cs.getPropertyValue("--surface-2"), [247, 249, 251]), grid: parse(cs.getPropertyValue("--border"), [226, 231, 238]), text: parse(cs.getPropertyValue("--text-2"), [71, 85, 105]) };
+    }
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const dt = Math.min(0.1, (now - last) / 1000); last = now;
+      if (intro < 1) intro = Math.min(1, intro + dt / 1.3);
+      if (!visible || document.hidden || !W) return;
+      if (now - themeAt > 1000) { readTheme(); themeAt = now; }
+      if (cam.auto && !drag) cam.yaw += dt * 0.12;
+      if (goal && !drag) { const k = Math.min(1, dt * 6); cam.yaw += (goal.yaw - cam.yaw) * k; cam.pitch += (goal.pitch - cam.pitch) * k; if (Math.abs(goal.yaw - cam.yaw) + Math.abs(goal.pitch - cam.pitch) < 0.002) goal = null; }
+      slots.forEach((s) => { if (s.on && !calm.matches) s.fan += dt * 9; });
+      const { pos, project } = camera();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineJoin = "round";
+      // floor with a grid, then soft shadows under each object
+      const fl = (x, z) => project([x, 0, z]);
+      path([fl(-120, -90), fl(120, -90), fl(120, 90), fl(-120, 90)]); ctx.fillStyle = rgb(theme.floor); ctx.fill();
+      ctx.strokeStyle = rgb(theme.grid); ctx.lineWidth = 1;
+      for (let g = -120; g <= 120; g += 20) { ctx.beginPath(); const a = fl(g, -90), b = fl(g, 90); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      for (let g = -90; g <= 90; g += 20) { ctx.beginPath(); const a = fl(-120, g), b = fl(120, g); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      const shadow = (x, z, rx, rz) => { path(Array.from({ length: 24 }, (_, k) => fl(x + rx * Math.cos((k / 24) * Math.PI * 2), z + rz * Math.sin((k / 24) * Math.PI * 2)))); ctx.fillStyle = "rgba(15,23,42,.12)"; ctx.fill(); };
+      shadow(4, -38, 44, 20);
+      shown().forEach((ch) => {
+        const s = slots.find((x) => x.ch === ch), { x, z } = SLOT[ch];
+        if (s) shadow(x + 3, z + 2, 24, 40);
+        if (s && s.m.id === focusId && !solo) { // the motor this page is about: a ring on the floor
+          path(Array.from({ length: 36 }, (_, k) => fl(x + 30 * Math.cos((k / 36) * Math.PI * 2), z + 46 * Math.sin((k / 36) * Math.PI * 2))));
+          ctx.strokeStyle = theme.focus; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
+        }
+        if (!s) { // free channel: dashed pad where a motor would stand
+          path([fl(x - 19, z - 32), fl(x + 19, z - 32), fl(x + 19, z + 32), fl(x - 19, z + 32)]);
+          ctx.setLineDash([6, 5]); ctx.strokeStyle = rgb(theme.text, 1, 0.6); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+        }
+      });
+      // everything else, back to front
+      const faces = [], d = DEVICES.find((x) => x.id === devId);
+      if (d) { deviceMesh(d, now, faces); slots.forEach((s) => motorMesh(s, now, faces)); }
+      const items = [];
+      faces.forEach((fc) => {
+        const cen = fc.p.reduce((a, p) => [a[0] + p[0] / fc.p.length, a[1] + p[1] / fc.p.length, a[2] + p[2] / fc.p.length], [0, 0, 0]);
+        if (dot(fc.n, sub(pos, cen)) <= 0) return; // facing away
+        const pp = fc.p.map(project);
+        if (pp.some((q) => q.z < 1)) return;
+        const k = 0.52 + 0.48 * Math.max(0, dot(fc.n, LIGHT));
+        items.push({ z: pp.reduce((a, q) => a + q.z, 0) / pp.length - (fc.bias || 0), draw: () => {
+          path(pp); ctx.fillStyle = ctx.strokeStyle = rgb(fc.c, fc.glow ? 1.15 : k); ctx.lineWidth = 0.6; ctx.fill(); ctx.stroke();
+          if (fc.paint) fc.paint(pp);
+        } });
+      });
+      // cables: each terminal wired to its probe (2 per motor) and to the ambient sensor; a pulse runs along while readings come in
+      const wire = (p0, c1, c2, p3, live, col, phase) => {
+        const at = (t) => [0, 1, 2].map((j) => (1 - t) ** 3 * p0[j] + 3 * (1 - t) ** 2 * t * c1[j] + 3 * (1 - t) * t * t * c2[j] + t ** 3 * p3[j]);
+        const pts = Array.from({ length: 25 }, (_, k) => project(at(k / 24)));
+        for (let k = 0; k < 24; k++) {
+          const a = pts[k], b = pts[k + 1];
+          items.push({ z: (a.z + b.z) / 2, draw: () => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = rgb(COL.cable); ctx.lineWidth = Math.max(2.2, (3.4 * H * 1.15) / ((a.z + b.z) / 2)); ctx.lineCap = "round"; ctx.stroke(); } });
+        }
+        if (live && !calm.matches) {
+          const q = project(at(((now / 1500) + phase) % 1));
+          items.push({ z: q.z - 2, draw: () => { ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(2.2, (2.8 * H) / q.z), 0, Math.PI * 2); ctx.fillStyle = rgb(col, 1.1); ctx.shadowColor = rgb(col); ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0; } });
+        }
+      };
+      TERMS.forEach((tm, i) => {
+        const p0 = termAt(tm);
+        if (tm.ta) { if (d) wire(p0, [p0[0], 1, p0[2] + 14], [TA_AT[0] + 6, 1, TA_AT[2] + 16], TA_AT, d.online, [138, 143, 152], 0.2); return; }
+        const s = slots.find((x) => x.ch === tm.ch); if (!s) return;
+        const p3 = probeAt(tm.ch, tm.j), side = SLOT[tm.ch].out;
+        wire(p0, [p0[0], 1, p0[2] + 18], [p3[0] + side * 17, 1, p3[2]], p3, s.on, tm.j === 0 ? COL.de : COL.nde, i * 0.23);
+      });
+      items.sort((a, b) => b.z - a.z).forEach((it) => it.draw());
+      if (!calm.matches) slots.forEach((sl, i) => {
+        if (!sl.on) return;
+        const { x, z } = SLOT[sl.ch], ph = ((now + i * 400) % STEP_MS) / STEP_MS;
+        [[probeAt(sl.ch, 0), COL.de], [probeAt(sl.ch, 1), COL.nde]].forEach(([pt, col]) => {
+          const q = project(pt);
+          ctx.beginPath(); ctx.arc(q.x, q.y, 3 + ph * 16, 0, Math.PI * 2); ctx.strokeStyle = rgb(col, 1, 0.75 * (1 - ph)); ctx.lineWidth = 2; ctx.stroke();
+        });
+        const rise = hotOf(sl.m.live) - sl.m.live[AMB];
+        if (rise >= LIMITS.riseWarn * 0.85) { // heat shimmer: wavy lines rising off the housing
+          const strength = Math.min(1, (rise - LIMITS.riseWarn * 0.85) / (LIMITS.riseCrit - LIMITS.riseWarn * 0.85 + 1) + 0.35);
+          [-12, 0, 12].forEach((off, j) => {
+            const t0 = ((now / 1600) + j * 0.33) % 1;
+            ctx.beginPath();
+            for (let k = 0; k <= 12; k++) {
+              const h = k / 12, q = project([x + Math.sin(now / 260 + k * 0.9 + j) * 1.6, MY + R + 6 + (t0 * 10) + h * 18, z + off]);
+              k ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+            }
+            ctx.strokeStyle = rgb(COL.crit, 1, strength * 0.55 * Math.sin(Math.PI * t0)); ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke();
+          });
+        }
+      });
+      // Wi-Fi: waves from the antenna while the device is online
+      const dv = DEVICES.find((x) => x.id === devId);
+      if (dv && dv.online) {
+        const tip = project(ANT_TIP), k0 = calm.matches ? 0.15 : (now / 1700) % 1;
+        for (let k = 0; k < 3; k++) {
+          const f = (k / 3 + k0) % 1;
+          ctx.beginPath(); ctx.arc(tip.x, tip.y - 4, 7 + f * 26, -Math.PI * 0.78, -Math.PI * 0.22);
+          ctx.strokeStyle = rgb(theme.wifi, 1, 0.85 * (1 - f)); ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.stroke();
+        }
+      }
+      // labels sit beside their part (outward for each motor) and a leader line joins them
+      const mid = anchors[0] ? project(anchors[0].p).x : W / 2, links = [], placed = [];
+      [...tags.children].forEach((t, i) => {
+        const a = anchors[i], tw = t.offsetWidth, th = t.offsetHeight;
+        if (!a || !tw) return; // hidden (details off)
+        const q = project(a.p), out = a.side || (q.x < mid ? -1 : 1);
+        const left = Math.max(6, Math.min(W - tw - 6, q.x + a.dx * out - tw / 2));
+        let top = Math.max(6, Math.min(H - th - 6, q.y + a.dy - th / 2));
+        // never cover a label placed before this one: step below it, or above when there's no room below
+        for (let pass = 0; pass < 3; pass++) placed.forEach((r) => {
+          if (left < r.l + r.w + 4 && left + tw + 4 > r.l && top < r.t + r.h + 4 && top + th + 4 > r.t) top = r.t + r.h + 4 + th <= H - 6 ? r.t + r.h + 4 : Math.max(6, r.t - th - 4);
+        });
+        placed.push({ l: left, t: top, w: tw, h: th });
+        t.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
+        if (a.line) links.push({ q, x: Math.max(left, Math.min(left + tw, q.x)), y: Math.max(top, Math.min(top + th, q.y)), a });
+      });
+      links.forEach(({ q, x, y, a }) => {
+        const col = a.color === "wifi" ? rgb(theme.wifi) : a.color || rgb(theme.text, 1, 0.75);
+        ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(x, y);
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+        if (a.wireless) { ctx.setLineDash([5, 4]); ctx.lineDashOffset = calm.matches ? 0 : -now / 50; } // data going out over Wi-Fi
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(q.x, q.y, 3.6, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke();
+      });
+    }
+
+    // ----- data: which motors are on the device's channels; labels -----
+    // a label: html, its 3D point p, offset dx (outward, × side) / dy in px, line = leader line to the point
+    function refresh() {
+      const d = DEVICES.find((x) => x.id === devId);
+      const prev = Object.fromEntries(slots.map((s) => [s.m.id, s.fan]));
+      slots = d ? runningOn(d).filter((m) => m.channel).map((m) => ({ ch: m.channel, m, on: d.online, st: d.online ? evalMotor(m).status : "off", fan: prev[m.id] || 0 })) : [];
+      leds = Object.fromEntries(slots.map((x) => [x.ch, x.st]));
+      if (solo) { // a motor's own page: only that motor; a stopped one stands grey on the channel it was last on
+        const m = d && d.motors.find((x) => x.id === focusId);
+        slots = m ? [{ ch: m.channel || 1, m, on: d.online && isRunning(m), st: !d.online ? "off" : evalMotor(m).status, fan: prev[m.id] || 0 }] : [];
+      }
+      const fs = slots.find((x) => x.m.id === focusId);
+      TARGET[0] = fs ? SLOT[fs.ch].x * (solo ? 0.62 : 0.4) : 0;
+      if (!d) { tags.innerHTML = ""; anchors = []; return; }
+      const one = solo && slots[0], list = [];
+      const add = (html, p, dx, dy, opt = {}) => list.push({ html, a: { p, dx, dy, ...opt } });
+      add(`<div class="scene-tag dev"><b>${esc(d.name)}</b><span>${esc(d.id)} · ${!d.online ? "offline" : one ? `${one.on ? "" : "was "}CH ${one.ch}` : `${slots.length} of ${MAX_RUN} channels in use`}</span></div>`, [0, 44, -42], 0, -46, { side: 1, line: true });
+      // Wi-Fi link: antenna → network details
+      add(`<div class="scene-tag net detail"><b>${ico(d.online ? "wifi" : "wifiOff")}Wi-Fi · ${d.online ? "connected" : "offline"}</b><span class="net-sig">${signalBars(d.online ? d.signal || 0 : 0)} IP <span class="mono">${esc(d.ip)}</span></span><span>Firmware v${esc(d.fw || "2.4.1")} · sample every ${STEP_MS / 1000} s</span></div>`,
+        ANT_TIP, 150, -22, { side: 1, line: true, wireless: true, color: "wifi" });
+      // ambient air sensor
+      const ta = (one || slots[0] || {}).m;
+      add(`<div class="scene-tag mini ta"><b>TA ${ta && d.online ? ta.live[AMB].toFixed(1) + " °C" : "—"}</b><span>ambient air</span></div>`, TA_AT, 70, 34, { side: -1, line: true, color: rgb([138, 143, 152]) });
+      shown().forEach((ch) => {
+        const s = slots.find((x) => x.ch === ch), { x, z } = SLOT[ch], side = SLOT[ch].out;
+        if (!s) {
+          add(`<div class="scene-tag free"><b>CH ${ch} free</b>${d.online ? `<button type="button" class="btn btn-sm btn-primary slot-on" data-quick-start="${esc(d.id)}">${ico("power")}Switch on</button>` : ""}</div>`, [x, 6, z], 0, -16, { side: 1 });
+          return;
+        }
+        const m = s.m, e = evalMotor(m), live = d.online, v = (j) => (live ? `${m.live[j].toFixed(1)} °C` : "—");
+        // motor details: terminal box → card
+        add(`<a class="scene-tag ${s.st}${m.id === focusId ? " is-focus" : ""}" href="motor.html?motor=${encodeURIComponent(m.id)}" title="Open ${esc(m.id)}">
+          <b>${s.on || !solo ? "" : "Stopped · "}CH ${ch} · ${esc(m.id)}</b>
+          <span class="x">${m.untitled ? "Details pending — add the motor details" : `${esc(m.model)} · ${esc(m.loco)}`}</span>
+          <span class="x">${m.untitled ? "No stator no. yet" : `Stator <span class="mono">${esc(m.stator || "—")}</span>`} · <span class="mono">${esc(m.testId || "—")}</span> · ${fmtRun(runMinutes(m))}</span>
+          <span class="x">Rise ${live ? e.rise.toFixed(1) : "—"} K above ambient</span>${verdictPill(s.st)}</a>`,
+          [x, MY + R + 8, z], 120, -62, { line: true, color: rgb(STATUS_C[s.st]) });
+        // probes: DE at the drive (shaft) end, NDE at the fan end
+        add(`<div class="scene-tag mini de detail"><b class="${live ? tCls(m.live[0], 0, m.live[AMB]) : ""}">DE ${v(0)}</b><span>drive end</span></div>`, probeAt(ch, 0), 70, 46, { side, line: true, color: rgb(COL.de) });
+        add(`<div class="scene-tag mini nde detail"><b class="${live ? tCls(m.live[1], 1, m.live[AMB]) : ""}">NDE ${v(1)}</b><span>non-drive end</span></div>`, probeAt(ch, 1), 86, -26, { side, line: true, color: rgb(COL.nde) });
+      });
+      anchors = list.map((x) => x.a);
+      tags.innerHTML = list.map((x) => x.html).join("");
+    }
+
+    // ----- controls: drag to turn; buttons zoom / reset / auto-turn -----
+    let drag = null, goal = null;
+    cv.addEventListener("pointerdown", (e) => {
+      if (fixed) return;
+      goal = null; drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); el.classList.add("is-dragging"); });
+    cv.addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      cam.yaw = clampYaw(cam.yaw - (e.clientX - drag.x) * 0.008); cam.pitch = Math.max(0.08, Math.min(1.25, cam.pitch + (e.clientY - drag.y) * 0.006));
+      drag.x = e.clientX; drag.y = e.clientY;
+      if (cam.auto) setAuto(false);
     });
-    $("#maTA").textContent = live ? `${m.live[AMB].toFixed(1)} °C` : "—";
-    $("#maAmb").classList.toggle("out", live && outOfRange(m.live[AMB], AMB));
-    $("#maState").textContent = !d.online ? "Device offline" : m.queued ? "Queued · not started" : running ? `Checking · rise ${e.rise.toFixed(1)} K above ambient` : "Stopped · last readings";
-    $("#animSub").textContent = `${d.name} · ${chLabel(m) || "no channel"} · DE drive end and NDE non-drive end on the motor, TA in the surrounding air · housing colour = rise above ambient (blue cool → red at ${LIMITS.riseCrit} K)`;
+    const end = () => { drag = null; el.classList.remove("is-dragging"); };
+    cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+    const tools = el.querySelector(".scene-tools");
+    const setAuto = (on) => { cam.auto = on; const b = tools && tools.querySelector("[data-scene=auto]"); if (!b) return; b.innerHTML = ico(on ? "pause" : "play"); b.setAttribute("aria-label", on ? "Stop turning" : "Turn slowly"); b.title = b.getAttribute("aria-label"); };
+    if (tools) tools.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-scene]"); if (!b) return;
+      const a = b.dataset.scene;
+      if (a === "in") cam.zoom = Math.min(2.2, cam.zoom * 1.2);
+      if (a === "out") cam.zoom = Math.max(0.6, cam.zoom / 1.2);
+      if (a === "reset") { goal = { yaw: 0.22, pitch: 0.44 }; cam.zoom = 1; }
+      if (a === "auto") setAuto(!cam.auto);
+      saveView();
+    });
+    setAuto(cam.auto);
+    el.classList.toggle("compact", !details); // overview: device + motors only
+
+    // ----- customise the view: preset angles, step turning, which labels to show (remembered per page) -----
+    const VIEW_KEY = `tt-view-${el.id}`, saved = store.get(VIEW_KEY, null);
+    const VIEWS = { angle: ["3/4", 0.22, 0.44], front: ["Front", 0, 0.16], side: ["Side", 1.5, 0.2], top: ["Top", 0.001, 1.25] };
+    const LAYERS = details ? [["net", "Wi-Fi"], ["probe", "DE / NDE"], ["ta", "Ambient"], ["info", "Motor details"]] : [["ta", "Ambient"]];
+    const hidden = new Set((saved && saved.hidden) || []);
+    if (!fixed && saved && saved.yaw != null) { cam.yaw = clampYaw(saved.yaw); cam.pitch = saved.pitch; cam.zoom = saved.zoom || 1; setAuto(false); }
+    function saveView() { store.set(VIEW_KEY, { yaw: goal ? goal.yaw : cam.yaw, pitch: goal ? goal.pitch : cam.pitch, zoom: cam.zoom, hidden: [...hidden] }); }
+    const bar = document.createElement("div");
+    bar.className = "scene-bar";
+    // with a fixed camera only the label switches are offered
+    bar.innerHTML = (fixed ? "" : `<div class="sb-group" role="group" aria-label="Camera angle"><span>View</span>${Object.entries(VIEWS).map(([k, [l]]) => `<button type="button" class="sb-btn" data-view="${k}">${l}</button>`).join("")}</div>
+      <div class="sb-group" role="group" aria-label="Turn the view">${[["left", "chevronLeft", "Turn left"], ["right", "chevronRight", "Turn right"], ["up", "chevronUp", "Tilt up"], ["down", "chevronDown", "Tilt down"]].map(([k, i, l]) => `<button type="button" class="sb-btn icon" data-turn="${k}" aria-label="${l}" title="${l}">${ico(i)}</button>`).join("")}</div>`) + `
+      <div class="sb-group sb-layers" role="group" aria-label="Labels to show"><span>Show</span>${LAYERS.map(([k, l]) => `<button type="button" class="sb-chip" data-layer="${k}">${l}</button>`).join("")}</div>`;
+    el.before(bar);
+    const applyLayers = () => {
+      LAYERS.forEach(([k]) => el.classList.toggle(`hide-${k}`, hidden.has(k)));
+      $$("[data-layer]", bar).forEach((b) => { const on = !hidden.has(b.dataset.layer); b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); b.title = `${on ? "Hide" : "Show"} ${b.textContent}`; });
+    };
+    bar.addEventListener("click", (e) => {
+      const v = e.target.closest("[data-view]"), t = e.target.closest("[data-turn]"), l = e.target.closest("[data-layer]");
+      if (v) { const [, yaw, pitch] = VIEWS[v.dataset.view]; goal = { yaw: clampYaw(yaw), pitch }; setAuto(false); }
+      if (t) {
+        const g = goal || { yaw: cam.yaw, pitch: cam.pitch }, dir = t.dataset.turn;
+        goal = { yaw: clampYaw(g.yaw + (dir === "left" ? 0.4 : dir === "right" ? -0.4 : 0)), pitch: Math.max(0.08, Math.min(1.25, g.pitch + (dir === "up" ? 0.15 : dir === "down" ? -0.15 : 0))) };
+        setAuto(false);
+      }
+      if (l) { const k = l.dataset.layer; if (hidden.has(k)) hidden.delete(k); else hidden.add(k); applyLayers(); }
+      if (v || t || l) saveView();
+    });
+    cv.addEventListener("pointerup", () => { if (!fixed) saveView(); });
+    applyLayers();
+    el.classList.toggle("fixed", fixed);
+    new ResizeObserver(resize).observe(el);
+    if (window.IntersectionObserver) new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(el);
+    resize(); readTheme();
+    requestAnimationFrame(frame);
+    return { show(id, focus, only = false) { if (id !== devId && !calm.matches && !fixed) intro = 0; devId = id; focusId = focus || null; solo = only && !!focusId; refresh(); }, refresh, get device() { return devId; }, get focus() { return focusId; } };
   }
 
   /* ---------- Aggregation graph ----------
@@ -1314,8 +1741,8 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  // motors that have readings to report (on a device and not waiting in its queue)
-  const reportableMotors = () => allMotors().filter(({ m }) => !m.queued);
+  // motors that have readings to report (every motor on a device)
+  const reportableMotors = allMotors;
 
   // one motor's section: details, summary, aggregation and every logged reading
   function motorReportLines(d, m, stepMin) {
@@ -1345,14 +1772,13 @@
   }
   const reportHead = (title) => [["Report", title], ["Generated", repStamp(Date.now())], ["Generated by", (currentUser() || {}).name || ""], []];
 
-  // used by the motor page and the download button on each row of the Motors page
+  // the motor page's "Download report" button (the Motors page links there with #report)
   function downloadMotorReport(id, stepMin = 10) {
-    if (!allowed("reports")) return;
+    if (!allowed("reports.create")) return;
     const x = id && findMotor(id);
     if (!x) return;
     const { d, m } = x;
     if (!d) { toast(`${m.id} is not assigned to a device — no readings to report`); return; }
-    if (m.queued) { toast(`${m.id} has no readings yet — start the check first`); return; }
     const n = trendPoints(m).length;
     saveCsv([...reportHead("Motor test report"), ...motorReportLines(d, m, stepMin)], `tractiontherm-${m.id}-${(m.testId || "test").toLowerCase()}-${fileStamp()}.csv`);
     logActivity("report", `Downloaded the motor report for ${m.id} · test ${m.testId || "—"} · ${n} readings`);
@@ -1361,7 +1787,7 @@
 
   // whole report: an overview row per motor, then each motor's full report one after another
   function downloadAllMotorReports(stepMin = 10) {
-    if (!allowed("reports")) return;
+    if (!allowed("reports.create")) return;
     const list = reportableMotors();
     if (!list.length) { toast("No motors with readings to report yet"); return; }
     const condOf = ({ d, m }) => { const e = evalMotor(m), st = d.online ? e.status : "off"; return st === "stop" ? e.condition : st; };
@@ -1403,7 +1829,7 @@
     $$(".nav a").forEach((a) => (a.getAttribute("href") === `${back.page}.html` ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     $(".topbar .crumbs").textContent = back.page === "monitor" ? "Monitor" : ORIGINS[back.page];
 
-    $("#motorAnim").innerHTML = motorSvg();
+    const scene = motorScene($("#motorScene"), { fixed: true }); // this motor in 3D, on its device, with every detail, one constant view
     // jump to another motor
     $("#mpSwitch").innerHTML = DEVICES.map((d) => `<optgroup label="${esc(d.name)}">${d.motors.map((m) =>
       `<option value="${esc(m.id)}">${esc(m.id)} · ${VERDICT_SHORT[d.online ? evalMotor(m).status : "off"]}</option>`).join("")}</optgroup>`).join("");
@@ -1423,47 +1849,59 @@
     const render = () => {
       const x = selected && findMotor(selected);
       const d = x && x.d, m = x && x.m;
-      $$(".motor-detail").forEach((el) => (el.hidden = !d || !!m.queued));
+      $$(".motor-detail").forEach((el) => (el.hidden = !d));
       $("#motorLive").hidden = !d; $("#motorHero").hidden = !d; $("#mpEmpty").hidden = !!d;
       if (!d) { updateAlertCount(); return; }
       document.title = `${m.id} · TractionTherm`;
       $("#mpTitle").textContent = m.id;
-      // header shortcut to this motor's report (no readings yet while queued)
+      // header shortcut to this motor's report
       const rep = $("#mpReport");
       rep.href = `reports.html?motor=${encodeURIComponent(m.id)}`;
-      rep.classList.toggle("is-disabled", !!m.queued);
-      rep.setAttribute("aria-disabled", m.queued ? "true" : "false");
-      rep.title = m.queued ? "No readings yet — start the check to get a report" : `Open ${m.id} in Reports`;
+      rep.title = `Open ${m.id} in Reports`;
       const dl = $("#mpDownload");
-      dl.disabled = !!m.queued;
-      dl.title = m.queued ? "No readings yet — start the check to download its report" : `Download ${m.id}'s report (CSV)`;
+      dl.title = `Download ${m.id}'s report (CSV)`;
       const e = evalMotor(m);
       const st = d.online ? e.status : "off";
       $("#motorHero").innerHTML = `
         <div class="mh-top">
           <div>
-            <div class="crumbs">${esc(d.name)} · ${esc(d.id)}${m.channel && !m.queued ? ` · ${isRunning(m) ? "Channel" : "was channel"} ${m.channel}` : ""} · ${esc(d.location)}</div>
+            <div class="crumbs">${esc(d.name)} · ${esc(d.id)}${m.channel ? ` · ${isRunning(m) ? "Channel" : "was channel"} ${m.channel}` : ""} · ${esc(d.location)}</div>
             <h2>${esc(m.id)}</h2>
             <div class="muted">Test ID <b class="mono test-id">${esc(m.testId || "—")}</b> · ${esc(m.model)} · ${esc(m.loco)} · Stator No. <span class="mono">${esc(m.stator || "—")}</span></div>
           </div>
-          <div class="mh-verdict">${verdictPill(st)}<span>${st === "ok" ? "All checks within limits" : st === "off" ? "Device offline" : st === "stop" ? `Check stopped — last readings shown · result ${VERDICT_SHORT[e.condition]}` : st === "wait" ? `Queued on ${esc(d.name)} — switch on when a position is free` : esc(reasonOf(e))}</span></div>
+          <div class="mh-verdict">${verdictPill(st)}<span>${st === "ok" ? "All checks within limits" : st === "off" ? "Device offline" : st === "stop" ? `Check stopped — last readings shown · result ${VERDICT_SHORT[e.condition]}` : esc(reasonOf(e))}</span></div>
         </div>
-        ${readings(m, d.online && !m.queued, "lg")}
+        ${readings(m, d.online, "lg")}
         <div class="mh-foot">
-          <span>${m.queued ? `Not started · ${runningOn(d).length} of ${MAX_RUN} channels in use on ${esc(d.name)}` : `Monitoring for <b>${fmtRun(runMinutes(m))}</b>`}</span>
+          <span>Monitoring for <b>${fmtRun(runMinutes(m))}</b></span>
           <span>DE / NDE Δ <b class="num">${e.dev.toFixed(1)} °C</b></span>
           <span>Trend <b>${trendText(e)}</b></span>
           <span class="mh-limits">${limitLine()} <button type="button" class="link-btn" data-edit-limits>Edit limits</button></span>
           <span class="mh-actions">
             <span class="mh-trigger">Monitoring ${triggerBtn(m, d)}</span>
-            <a class="btn btn-sm${m.queued ? " is-disabled" : ""}" href="reports.html?motor=${encodeURIComponent(m.id)}"${m.queued ? ' aria-disabled="true" title="No readings yet — start the check to get a report"' : ""}>${ico("report")}Report</a>
-            <button type="button" class="btn btn-sm" data-edit-motor="${esc(m.id)}">${ico("edit")}Edit</button>
+            <a class="btn btn-sm" href="reports.html?motor=${encodeURIComponent(m.id)}">${ico("report")}Report</a>
+            <button type="button" class="btn btn-sm${m.untitled ? " btn-primary" : ""}" data-edit-motor="${esc(m.id)}">${ico("edit")}${m.untitled ? "Add details" : "Edit"}</button>
           </span>
         </div>`;
 
       $("#animPill").innerHTML = verdictPill(st);
-      paintMotor(d, m, e);
-      if (m.queued) { updateAlertCount(); return; }
+      // every test of this motor: the current run first, then the earlier ones (same stator, a new Test ID each run)
+      const runs = [...(m.testId ? [{ cur: true, testId: m.testId, device: d.name, channel: m.channel, start: m.runStart, end: isRunning(m) ? null : m.stoppedAt || null, ...runPeak(m), result: isRunning(m) ? null : e.condition }] : []), ...(m.tests || [])];
+      $("#histSub").textContent = `${runs.length} test${runs.length === 1 ? "" : "s"} of ${m.id} · stator ${m.stator || "—"} · every run gets its own Test ID`;
+      $("#histRows").innerHTML = runs.map((r) => `<tr${r.cur ? ' class="is-current"' : ""}>
+        <td class="lead-cell" data-label="Test ID"><b class="mono">${esc(r.testId)}</b>${r.cur ? ` ${badge(isRunning(m) ? "ok" : "stop", isRunning(m) ? "Current · running" : "Current · stopped")}` : ""}</td>
+        <td data-label="Device">${esc(r.device)}${r.channel ? ` · CH ${r.channel}` : ""}</td>
+        <td data-label="Started">${esc(repStamp(r.start))}</td>
+        <td data-label="Duration" class="num">${fmtRun(((r.end || Date.now()) - r.start) / 60000)}</td>
+        <td data-label="Max DE °C" class="num">${r.de.toFixed(1)}</td>
+        <td data-label="Max NDE °C" class="num">${r.nde.toFixed(1)}</td>
+        <td data-label="Max rise K" class="num">${r.rise.toFixed(1)}</td>
+        <td data-label="Result">${r.result ? verdictPill(r.result) : '<span class="muted">In progress</span>'}</td>
+      </tr>`).join("");
+      if (scene.device !== d.id || scene.focus !== m.id) scene.show(d.id, m.id, true); else scene.refresh();
+      $("#animSub").textContent = isRunning(m) && m.channel
+        ? `${m.id} on ${d.name} ${chLabel(m)} · Wi-Fi, probes and ambient sensor linked to their readings · housing colour = rise above ambient (cool → red at ${LIMITS.riseCrit} K)`
+        : `${m.id} on ${d.name} · stopped${m.channel ? ` (was ${chLabel(m)})` : ""} · last readings shown · switch it on to start a new run`;
 
       const mode = ($("input[name=trendMode]:checked") || {}).value || "temp";
       const series = runSeries(m, mode);
@@ -1513,6 +1951,34 @@
   function pageDevices() {
     const dlg = $("#deviceDialog"), form = $("#deviceForm");
     let filter = "all", editing = null;
+    let selected = new URLSearchParams(location.search).get("device"); // device whose motors are listed below the table
+
+    // every motor on the selected device (checking now first, then stopped), refreshed with each sample
+    const renderMotors = () => {
+      const box = $("#devMotors"), d = DEVICES.find((x) => x.id === selected);
+      box.hidden = !d;
+      if (!d) return;
+      const list = [...runningOn(d), ...d.motors.filter((m) => !isRunning(m))], free = d.online && freeChannel(d);
+      $("#dmTitle").textContent = `Motors on ${d.name}`;
+      $("#dmSub").textContent = `${d.id} · ${d.location} · ${list.length} motor${list.length === 1 ? "" : "s"} · ${runningOn(d).length} of ${MAX_RUN} channels in use`;
+      $("#dmActions").innerHTML = (free ? `<button type="button" class="btn btn-sm btn-primary slot-on" data-quick-start="${esc(d.id)}">${ico("power")}Switch on CH ${free}</button><button type="button" class="btn btn-sm" data-add-motor="${esc(d.id)}">${ico("plus")}Assign motor</button>` : "")
+        + `<button type="button" class="icon-btn" data-dm-close aria-label="Close the motor list" title="Close">${ico("x")}</button>`;
+      $("#dmRows").innerHTML = list.length ? list.map((m) => {
+        const e = evalMotor(m), id = esc(m.id);
+        return `<tr>
+          <td class="lead-cell" data-label="Motor"><b class="mono">${id}</b><span class="muted stator-no">${m.untitled ? "Details pending" : `Stator No. <span class="mono">${esc(m.stator || "—")}</span>`}</span></td>
+          <td data-label="Model / type" class="col-mid"><div class="cell-stack">${esc(m.model)}<span class="muted cell-sub">${esc(m.loco)}</span></div></td>
+          <td data-label="Channel / test"><div class="cell-stack">${isRunning(m) ? chLabel(m) : m.channel ? `Was ${chLabel(m)}` : "—"}<span class="muted cell-sub mono">${esc(m.testId || "")}</span></div></td>
+          ${PROBES.map((p, j) => `<td data-label="${p} °C" class="num${j === AMB ? " col-opt" : ""} ${d.online ? tCls(m.live[j], j, m.live[AMB]) : "muted"}">${d.online ? m.live[j].toFixed(1) : "—"}</td>`).join("")}
+          <td data-label="Condition">${verdictPill(d.online ? e.status : "off")}</td>
+          <td data-label="Monitoring">${triggerBtn(m, d)}</td>
+          <td data-label=""><div class="row-actions">
+            <a class="btn btn-sm" href="motor.html?motor=${encodeURIComponent(m.id)}" title="Live view and analysis">${ico("activity")}<span class="hide-sm">Monitor</span></a>
+            <button class="btn btn-sm btn-ghost" data-edit-motor="${id}" aria-label="${m.untitled ? "Add details for" : "Edit"} ${id}" title="${m.untitled ? "Add details" : "Edit"}">${ico("edit")}</button>
+          </div></td>
+        </tr>`;
+      }).join("") : `<tr><td colspan="${6 + PROBES.length}" class="muted" style="text-align:center;padding:28px">No motors on ${esc(d.name)} yet${free ? " — switch on a channel or assign a motor" : ""}.</td></tr>`;
+    };
 
     const render = () => {
       const term = ($("#devSearch").value || "").toLowerCase();
@@ -1521,14 +1987,14 @@
         [d.id, d.name, d.location, d.ip, ...d.motors.map((m) => m.id)].join(" ").toLowerCase().includes(term));
       $("#devCount").textContent = `${list.length} of ${DEVICES.length} devices`;
       $("#devRows").innerHTML = list.length ? list.map((d) => {
-        const order = [...runningOn(d), ...d.motors.filter((m) => m.queued), ...d.motors.filter((m) => !isRunning(m) && !m.queued)];
-        const motors = order.map((m) => `<a class="motor-chip${isRunning(m) ? "" : " idle"}" href="motor.html?motor=${encodeURIComponent(m.id)}" title="${esc(m.id)} · ${isRunning(m) ? "checking now" : m.queued ? "queued" : "checked"} · open">${verdictDot(d.online ? evalMotor(m).status : "off")}${esc(m.id)}</a>`).join("");
-        const nq = d.motors.filter((m) => m.queued).length, nc = d.motors.filter((m) => !isRunning(m) && !m.queued).length;
-        return `<tr>
+        const order = [...runningOn(d), ...d.motors.filter((m) => !isRunning(m))];
+        const motors = order.map((m) => `<a class="motor-chip${isRunning(m) ? "" : " idle"}" href="motor.html?motor=${encodeURIComponent(m.id)}" title="${esc(m.id)} · ${isRunning(m) ? "checking now" : "checked"} · open">${verdictDot(d.online ? evalMotor(m).status : "off")}${esc(m.id)}</a>`).join("");
+        const nc = d.motors.filter((m) => !isRunning(m)).length;
+        return `<tr class="dev-row${d.id === selected ? " is-selected" : ""}" data-dev="${esc(d.id)}" tabindex="0" aria-selected="${d.id === selected}" title="Show the motors on ${esc(d.name)}">
           <td class="lead-cell" data-label="Device"><div class="cell-dev"><span class="device-ico">${ico("cpu")}</span><div><b>${esc(d.name)}</b><span class="mono">${esc(d.id)} · v${esc(d.fw || "2.4.1")}</span></div></div></td>
           <td data-label="Location">${esc(d.location)}</td>
           <td data-label="IP address" class="mono">${esc(d.ip)}</td>
-          <td data-label="Motors"><div class="cell-stack"><div class="motor-chips">${motors}<button type="button" class="link-btn" data-add-motor="${esc(d.id)}">${ico("plus")}Assign</button></div><span class="muted chip-count">${runningOn(d).map((m) => `${chLabel(m)} ${m.id}`).join(" · ") || "No channel in use"} · ${runningOn(d).length} of ${MAX_RUN} channels${nq ? ` · ${nq} queued` : ""}${nc ? ` · ${nc} checked` : ""}</span></div></td>
+          <td data-label="Motors"><div class="cell-stack"><div class="motor-chips">${motors}<button type="button" class="link-btn" data-add-motor="${esc(d.id)}">${ico("plus")}Assign</button></div><span class="muted chip-count">${runningOn(d).map((m) => `${chLabel(m)} ${m.id}`).join(" · ") || "No channel in use"} · ${runningOn(d).length} of ${MAX_RUN} channels${nc ? ` · ${nc} checked` : ""}</span></div></td>
           <td data-label="Signal" class="col-opt">${signalBars(d.signal || 0)}</td>
           <td data-label="Status">${statusCell(d)}</td>
           <td data-label=""><div class="row-actions">
@@ -1539,15 +2005,23 @@
           </div></td>
         </tr>`;
       }).join("") : `<tr><td colspan="7" class="muted" style="text-align:center;padding:32px">${DEVICES.length ? "No devices match your filters." : "No devices yet — use “Add device”."}</td></tr>`;
+      renderMotors();
       updateAlertCount();
+    };
+    // pick a device: its row is highlighted and its motors are listed (same device again closes the list)
+    const select = (id) => {
+      selected = selected === id ? null : id;
+      render();
+      if (selected) requestAnimationFrame(() => $("#devMotors").scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" }));
     };
 
     function open(d) {
-      if (!allowed("devices")) return;
+      if (!allowed(d ? "devices.update" : "devices.create")) return;
       editing = d || null;
       form.reset();
       $$("input, select", form).forEach((el) => el.setCustomValidity("")); // clear errors left by a cancelled attempt
       $("#dlgTitle").textContent = d ? `Edit device ${d.id}` : "Add new device";
+      $("#dlgSub").textContent = d ? "Update the device's name, location or IP address." : "Register a monitoring device. Then switch it on from Monitor, or assign motors to it.";
       $("#dlgSave").textContent = d ? "Save changes" : "Add device";
       form.elements.id.readOnly = !!d;
       if (d) {
@@ -1573,7 +2047,7 @@
       saveDevices();
       dlg.close();
       logActivity("device", editing ? `Edited device ${id}${changes.length ? ` — ${changes.join(", ")}` : " — no changes"}` : `Registered device ${id} (${data.name}, ${data.location}, ${data.ip})`);
-      toast(editing ? `${id} updated` : `${id} added — assign motors to it from the Motors page`);
+      toast(editing ? `${id} updated` : `${id} added — switch it on from Monitor, or assign motors to it`);
       render();
     });
     form.addEventListener("input", (e) => e.target.setCustomValidity && e.target.setCustomValidity(""));
@@ -1581,21 +2055,21 @@
     function viewDevice(d) {
       const rows = d.motors.map((m) => {
         const e = evalMotor(m);
-        return `<li><span class="muted">${ico("motor")}</span><b>${esc(m.id)}</b><span class="num">${d.online && !m.queued ? m.live.map((v) => v.toFixed(1)).join(" / ") + " °C" : "—"}</span>${verdictPill(d.online ? e.status : "off")}</li>`;
-      }).join("") + `<li><span class="muted">${ico("plus")}</span><span class="muted">${runningOn(d).length < MAX_RUN ? "Free position" : "Add to the queue"}</span><span></span><button type="button" class="btn btn-sm" data-add-motor="${esc(d.id)}" data-close>Assign motor</button></li>`;
+        return `<li><span class="muted">${ico("motor")}</span><b>${esc(m.id)}</b><span class="num">${d.online ? m.live.map((v) => v.toFixed(1)).join(" / ") + " °C" : "—"}</span>${verdictPill(d.online ? e.status : "off")}</li>`;
+      }).join("") + (freeChannel(d) ? `<li><span class="muted">${ico("plus")}</span><span class="muted">Channel ${freeChannel(d)} is free</span><span></span><button type="button" class="btn btn-sm" data-add-motor="${esc(d.id)}" data-close>Assign motor</button></li>` : "");
       const dlg = viewDialog({
         title: d.name, sub: `${d.id} · ${d.location}`,
         rows: [["Status", d.online ? `<span class="badge ok"><span class="pulse"></span>Online</span>` : `${badge("off")} <span class="muted">Last seen ${esc(d.lastSeen || "—")}</span>`],
           ["IP address", `<span class="mono">${esc(d.ip)}</span>`], ["Firmware", `v${esc(d.fw || "2.4.1")}`], ["Signal", signalBars(d.signal || 0)], ["Channels", CHANNELS.map((c) => { const m = runningOn(d).find((x) => x.channel === c); return `CH ${c}: ${m ? m.id : "free"}`; }).join(" · ")], ["Motors", `${d.motors.length} assigned`]],
         body: `<div><div class="detail-title">Motors monitored <span class="muted">(${PROBES.join(" / ")} °C)</span></div><ul class="detail-slots">${rows}</ul></div>`,
-        actions: `<button type="button" class="btn btn-danger" data-v-del>${ico("trash")}Delete</button><button type="button" class="btn btn-primary" data-v-edit>${ico("edit")}Edit</button>`
+        actions: `${can("devices.delete") ? `<button type="button" class="btn btn-danger" data-v-del>${ico("trash")}Delete</button>` : ""}${can("devices.update") ? `<button type="button" class="btn btn-primary" data-v-edit>${ico("edit")}Edit</button>` : ""}`
       });
-      dlg.querySelector("[data-v-edit]").addEventListener("click", () => { dlg.close(); open(d); });
-      dlg.querySelector("[data-v-del]").addEventListener("click", () => { dlg.close(); removeDevice(d.id); });
+      dlg.querySelector("[data-v-edit]")?.addEventListener("click", () => { dlg.close(); open(d); });
+      dlg.querySelector("[data-v-del]")?.addEventListener("click", () => { dlg.close(); removeDevice(d.id); });
     }
 
     async function removeDevice(id) {
-      if (!allowed("devices")) return;
+      if (!allowed("devices.delete")) return;
       const d = DEVICES.find((x) => x.id === id);
       if (!d) return;
       const ok = await confirmDialog({
@@ -1604,7 +2078,7 @@
         confirmLabel: "Delete device"
       });
       if (!ok) return;
-      d.motors.forEach((m) => SPARE.push({ id: m.id, stator: m.stator, model: m.model, loco: m.loco }));
+      d.motors.forEach((m) => { archiveRun(m, d); SPARE.push(spareOf(m)); });
       DEVICES = DEVICES.filter((x) => x !== d);
       saveDevices(); saveSpare();
       logActivity("device", `Deleted device ${d.id} (${d.name})${d.motors.length ? ` — motors ${d.motors.map((m) => m.id).join(", ")} now not assigned` : ""}`);
@@ -1618,11 +2092,19 @@
       if (ed) open(DEVICES.find((d) => d.id === ed.dataset.edit));
       if (vw) viewDevice(DEVICES.find((d) => d.id === vw.dataset.view));
       if (del) removeDevice(del.dataset.del);
+      // anywhere else on the row (not a button or link): show that device's motors
+      const row = e.target.closest("tr[data-dev]");
+      if (row && !e.target.closest("a, button")) select(row.dataset.dev);
     });
+    $("#devRows").addEventListener("keydown", (e) => {
+      const row = e.target.closest("tr[data-dev]");
+      if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(row.dataset.dev); }
+    });
+    $("#devMotors").addEventListener("click", (e) => { if (e.target.closest("[data-dm-close]")) { selected = null; render(); } });
     $("#devSearch").addEventListener("input", render);
     $$("[name=devFilter]").forEach((r) => r.addEventListener("change", () => { filter = r.value; render(); }));
     $("#resetDemo") && $("#resetDemo").addEventListener("click", async () => {
-      if (!allowed("devices")) return;
+      if (!allowed("devices.delete")) return;
       if (!(await confirmDialog({ title: "Reset demo data?", message: "All devices and motors go back to the original demo set. Your changes will be lost.", confirmLabel: "Reset", danger: false }))) return;
       DEVICES = JSON.parse(JSON.stringify(DEFAULT_DEVICES)); DEVICES.forEach((d) => d.motors.forEach(seedMotor));
       SPARE = JSON.parse(JSON.stringify(DEFAULT_SPARE));
@@ -1661,9 +2143,9 @@
         [x.m.id, x.m.stator, x.m.testId, x.m.model, x.m.loco, x.d ? x.d.name : "not assigned"].join(" ").toLowerCase().includes(term));
       $("#motorCount").textContent = `${rows.length} of ${all.length} motors`;
       $("#motorRows").innerHTML = rows.length ? rows.map((x) => {
-        const { d, m } = x, cond = condOf(x), live = d && d.online && !m.queued, e = d ? evalMotor(m) : null;
+        const { d, m } = x, cond = condOf(x), live = d && d.online, e = d ? evalMotor(m) : null;
         const id = esc(m.id);
-        return `<tr>
+        return `<tr class="motor-row" data-row-motor="${id}" tabindex="0" title="${d ? `Open ${id}'s monitoring` : `${id} details (not on a device yet)`}">
           <td class="lead-cell" data-label="Motor"><b class="mono">${id}</b><span class="muted stator-no">Stator No. <span class="mono">${esc(m.stator || "—")}</span></span></td>
           <td data-label="Model / type" class="col-mid"><div class="cell-stack">${esc(m.model)}<span class="muted cell-sub">${esc(m.loco)}</span></div></td>
           <td data-label="Device"><span>${d ? `${esc(d.name)}${isRunning(m) && m.channel ? ` · ${chLabel(m)}` : ""}<span class="muted cell-sub mono">${esc(m.testId || "")}</span>` : `<span class="muted">Not assigned</span>`} <button type="button" class="link-btn" data-assign-motor="${id}">${d ? "Change" : "Assign"}</button></span></td>
@@ -1673,7 +2155,6 @@
           <td data-label="Monitoring">${d ? triggerBtn(m, d) : '<span class="muted">—</span>'}</td>
           <td data-label=""><div class="row-actions">
             ${d ? `<a class="btn btn-sm" href="motor.html?motor=${encodeURIComponent(m.id)}" title="Monitor">${ico("activity")}<span class="hide-sm">Monitor</span></a>` : ""}
-            ${d && can("reports") ? `<a class="btn btn-sm btn-ghost${m.queued ? " is-disabled" : ""}" href="motor.html?motor=${encodeURIComponent(m.id)}#report" aria-label="${id} report"${m.queued ? ' aria-disabled="true"' : ""} title="${m.queued ? "No readings yet — start the check to get its report" : `Open ${id} to view and download its report`}">${ico("report")}</a>` : ""}
             <button class="btn btn-sm btn-ghost" data-view-motor="${id}" aria-label="View ${id}" title="View">${ico("eye")}</button>
             <button class="btn btn-sm btn-ghost" data-edit-motor="${id}" aria-label="Edit ${id}" title="Edit">${ico("edit")}</button>
             <button class="btn btn-sm btn-ghost btn-danger" data-del-motor="${id}" aria-label="Delete ${id}" title="Delete">${ico("trash")}</button>
@@ -1682,6 +2163,17 @@
       }).join("") : `<tr><td colspan="${7 + PROBES.length}" class="muted" style="text-align:center;padding:32px">${all.length ? "No motors match your filters." : "No motors yet — use “Add motor”."}</td></tr>`;
       updateAlertCount();
     };
+    // click (or Enter on) a motor's row: that motor's own monitoring page; a motor not on a device has none yet → its details
+    const openRow = (ev) => {
+      const row = ev.target.closest("tr[data-row-motor]");
+      if (!row || ev.target.closest("a, button, input, select, label")) return;
+      if (ev.type === "keydown" && (ev.target !== row || (ev.key !== "Enter" && ev.key !== " "))) return;
+      ev.preventDefault();
+      const x = findMotor(row.dataset.rowMotor); if (!x) return;
+      if (x.d) location.href = `motor.html?motor=${encodeURIComponent(x.m.id)}`; else viewMotor(x.m.id);
+    };
+    $("#motorRows").addEventListener("click", openRow);
+    $("#motorRows").addEventListener("keydown", openRow);
     $("#motorSearch").addEventListener("input", render);
     devSel.addEventListener("change", render);
     condSel.addEventListener("change", render);
@@ -1694,13 +2186,10 @@
   }
 
   /* =========================================================
-     Page: Reports — filtered condition summary / readings log, CSV + print
-     ========================================================= */
-  /* =========================================================
      Page: Settings — min / max limit for each terminal (DE, NDE, TA)
      ========================================================= */
   function pageSettings() {
-    const editable = can("limits"), SCALE = { lo: -20, hi: 160 }; // °C shown on the range bars
+    const editable = can("limits.update"), SCALE = { lo: -20, hi: 160 }; // °C shown on the range bars
     const pos = (v) => (((Math.max(SCALE.lo, Math.min(SCALE.hi, v)) - SCALE.lo) / (SCALE.hi - SCALE.lo)) * 100).toFixed(2) + "%";
     const field = (p, k) => $(`#term-${p}-${k}`);
     $("#termRows").innerHTML = PROBES.map((p, j) => `<tr>
@@ -1734,7 +2223,7 @@
     };
     $("#termRows").addEventListener("input", () => { err.classList.remove("show"); render(); });
     $("#termSave").addEventListener("click", () => {
-      if (!allowed("limits")) return;
+      if (!allowed("limits.update")) return;
       const v = read();
       for (const p of PROBES) {
         const { min, max } = v[p];
@@ -1751,7 +2240,7 @@
       render();
     });
     $("#termReset").addEventListener("click", async () => {
-      if (!allowed("limits")) return;
+      if (!allowed("limits.update")) return;
       if (!(await confirmDialog({ title: "Reset terminal limits?", message: "Every terminal goes back to its default range (DE / NDE 0–120 °C, TA 0–50 °C).", confirmLabel: "Reset", danger: false }))) return;
       PROBES.forEach((p) => { TERM[p] = { ...DEFAULT_TERM[p] }; field(p, "min").value = TERM[p].min; field(p, "max").value = TERM[p].max; });
       store.set(TERM_KEY, TERM);
@@ -1764,12 +2253,15 @@
     return render;
   }
 
+  /* =========================================================
+     Page: Reports — filtered condition summary / readings log, CSV + print
+     ========================================================= */
   function pageReports() {
     const f = $("#repForm").elements, q = new URLSearchParams(location.search);
-    const stamp = (t) => new Date(t).toLocaleString([], { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const stamp = repStamp;
     const fillMotors = () => {
       const keep = f.motor.value;
-      const list = allMotors().filter(({ d, m }) => !m.queued && (f.device.value === "all" || d.id === f.device.value));
+      const list = allMotors().filter(({ d }) => (f.device.value === "all" || d.id === f.device.value));
       f.motor.innerHTML = `<option value="all">All motors</option>` + list.map(({ m }) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`).join("");
       f.motor.value = list.some(({ m }) => m.id === keep) ? keep : "all";
     };
@@ -1806,8 +2298,7 @@
       const x = findMotor(q.get("motor"));
       if (x && x.d) {
         f.device.value = x.d.id; fillMotors();
-        if ([...f.motor.options].some((o) => o.value === x.m.id)) f.motor.value = x.m.id;
-        else toast(`${x.m.id} has no readings yet (queued) — showing all motors on ${x.d.name}`);
+        f.motor.value = x.m.id;
         const back = $("#repBack");
         if (back) { back.href = `motor.html?motor=${encodeURIComponent(x.m.id)}`; back.textContent = `← Back to ${x.m.id}`; back.hidden = false; }
       }
@@ -1922,7 +2413,7 @@
 
     // build the report rows for the current filters
     function build() {
-      const motors = allMotors().filter(({ d, m }) => !m.queued && (f.device.value === "all" || d.id === f.device.value) && (f.motor.value === "all" || m.id === f.motor.value));
+      const motors = allMotors().filter(({ d, m }) => (f.device.value === "all" || d.id === f.device.value) && (f.motor.value === "all" || m.id === f.motor.value));
       const statusOf = ({ d, m }) => (d.online ? evalMotor(m).status : "off");
       if (f.type.value === "summary") {
         const rows = motors.filter((x) => {
@@ -1990,23 +2481,15 @@
     };
 
     $("#repCsv").addEventListener("click", () => {
-      if (!allowed("reports")) return;
+      if (!allowed("reports.create")) return;
       if (!report || !report.rows.length) { toast("Nothing to download — change the filters"); return; }
-      const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
       // "Label: value" → two cells (split at the first ": " only, a search term may contain one)
       const meta = filterText().map((t) => { const i = t.indexOf(": "); return i < 0 ? [t] : [t.slice(0, i), t.slice(i + 2)]; });
-      const lines = [["Report", report.title], ["Generated", stamp(Date.now())], ...meta, [], report.cols, ...report.rows.map((r) => r.cells)];
-      const blob = new Blob(["﻿" + lines.map((l) => l.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-      const a = document.createElement("a");
-      const d = new Date(), pad = (n) => String(n).padStart(2, "0");
-      a.href = URL.createObjectURL(blob);
-      a.download = `tractiontherm-${f.type.value}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      saveCsv([["Report", report.title], ["Generated", stamp(Date.now())], ...meta, [], report.cols, ...report.rows.map((r) => r.cells)], `tractiontherm-${f.type.value}-${fileStamp()}.csv`);
       logActivity("report", `Downloaded ${report.title} CSV — ${report.rows.length} rows · ${filterText().join(" · ")}`);
       toast(`Downloaded ${report.rows.length} rows`);
     });
-    $("#repPrint").addEventListener("click", () => { if (!allowed("reports")) return; render(); logActivity("report", `Printed ${report.title} — ${report.rows.length} rows · ${filterText().join(" · ")}`); window.print(); });
+    $("#repPrint").addEventListener("click", () => { if (!allowed("reports.create")) return; render(); logActivity("report", `Printed ${report.title} — ${report.rows.length} rows · ${filterText().join(" · ")}`); window.print(); });
     const resetRules = () => { rules = []; f.ruleMode.value = "all"; rulesSig = ""; };
     $("#repReset").addEventListener("click", () => { defaults(); syncCtype(); syncSearch(); resetRules(); render(); });
     // custom rules: the rule controls have no name, so they don't clash with the form's filters
@@ -2069,12 +2552,13 @@
       const keep = $("#roleFilter").value;
       $("#roleFilter").innerHTML = `<option value="">All roles</option>` + ROLES.map((r) => `<option>${esc(r.name)}</option>`).join("");
       $("#roleFilter").value = ROLES.some((r) => r.name === keep) ? keep : "";
-      form.elements.role.innerHTML = ROLES.map((r) => `<option>${esc(r.name)}</option>`).join("") + `<option value="${NEW_ROLE}">+ Enter a new role…</option>`;
+      // only an Administrator can hand out the Administrator role; typing a new role needs Roles · Create
+      form.elements.role.innerHTML = ROLES.map((r) => `<option${r.name === ADMIN_ROLE && !isAdmin() ? " disabled" : ""}>${esc(r.name)}</option>`).join("") + (can("roles.create") ? `<option value="${NEW_ROLE}">+ Enter a new role…</option>` : "");
     };
     const syncRoleNew = () => {
       const typed = form.elements.role.value === NEW_ROLE, box = form.elements.roleNew;
       box.hidden = !typed;
-      $("#roleHint").textContent = typed ? "A new role starts with view-only access · set its permissions on Roles & Permissions" : "Pick a role, or choose “Enter a new role…” to type one";
+      $("#roleHint").textContent = typed ? "A new role starts with view-only access · set its permissions on Roles & Permissions" : can("roles.create") ? "Pick a role, or choose “Enter a new role…” to type one" : "Pick a role";
       if (typed) box.focus();
     };
     fillRoles();
@@ -2092,7 +2576,8 @@
       $("#userRows").innerHTML = rows.length ? rows.map((u) => {
         const self = me && me.id === u.id;
         const lastAdmin = u.role === "Administrator" && u.active && activeAdmins().length === 1;
-        const block = self ? "You can't delete your own account" : lastAdmin ? "At least one active Administrator is required" : "";
+        const adminOnly = u.role === ADMIN_ROLE && !isAdmin() ? "Only an Administrator can change an Administrator's account" : "";
+        const block = self ? "You can't delete your own account" : lastAdmin ? "At least one active Administrator is required" : adminOnly;
         return `<tr>
           <td class="lead-cell" data-label="User"><div class="cell-dev"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}${self ? ' <span class="you-tag">You</span>' : ""}</b><span>${esc(u.email)}</span></div></div></td>
           <td data-label="Username" class="mono">${esc(u.username)}</td>
@@ -2101,7 +2586,7 @@
           <td data-label="Last sign-in" class="num">${esc(fmtLogin(u.lastLogin))}</td>
           <td data-label=""><div class="row-actions">
             <button class="btn btn-sm btn-ghost" data-uview="${u.id}" aria-label="View ${esc(u.name)}" title="View">${ico("eye")}</button>
-            <button class="btn btn-sm btn-ghost" data-uedit="${u.id}" aria-label="Edit ${esc(u.name)}" title="Edit">${ico("edit")}</button>
+            <button class="btn btn-sm btn-ghost" data-uedit="${u.id}" aria-label="Edit ${esc(u.name)}" title="${adminOnly || "Edit"}" ${adminOnly ? "disabled" : ""}>${ico("edit")}</button>
             <button class="btn btn-sm btn-ghost btn-danger" data-udel="${u.id}" aria-label="Delete ${esc(u.name)}" title="${block || "Delete"}" ${block ? "disabled" : ""}>${ico("trash")}</button>
           </div></td>
         </tr>`;
@@ -2109,6 +2594,8 @@
     };
 
     function open(u) {
+      if (!allowed(u ? "users.update" : "users.create")) return;
+      if (u && u.role === ADMIN_ROLE && !isAdmin()) { toast("Only an Administrator can change an Administrator's account"); return; }
       editing = u || null;
       form.reset(); err.classList.remove("show");
       $$("input, select", form).forEach((el) => el.setCustomValidity(""));
@@ -2119,7 +2606,7 @@
       if (u) {
         ["name", "username", "email", "role"].forEach((k) => (form.elements[k].value = u[k]));
         form.elements.active.checked = u.active;
-      } else form.elements.role.value = "Operator";
+      } else form.elements.role.value = ROLES.some((r) => r.name === "Operator") ? "Operator" : (ROLES.find((r) => r.name !== ADMIN_ROLE) || ROLES[0]).name;
       form.elements.roleNew.value = "";
       syncRoleNew();
       dlg.showModal();
@@ -2146,6 +2633,8 @@
       const pw = f.password.value;
       if ((!editing || pw) && pw.length < 6) return fail("Password must be at least 6 characters.");
       const me = currentUser();
+      if (data.role === ADMIN_ROLE && (!editing || editing.role !== ADMIN_ROLE) && !isAdmin()) return fail("Only an Administrator can give someone the Administrator role.");
+      if (newRole && !can("roles.create")) return fail("Your role can't create new roles — pick an existing one.");
       if (editing && me && editing.id === me.id && (!data.active || data.role !== editing.role) && editing.role === "Administrator" && activeAdmins().length === 1) return fail("You are the only active Administrator — keep your role and account active.");
       if (editing && editing.role === "Administrator" && editing.active && (data.role !== "Administrator" || !data.active) && activeAdmins().length === 1) return fail("At least one active Administrator is required.");
       const changes = editing ? [editing.name !== data.name && `name ${editing.name} → ${data.name}`, editing.username !== data.username && `username ${editing.username} → ${data.username}`,
@@ -2153,7 +2642,7 @@
         editing.active !== data.active && (data.active ? "account enabled" : "account disabled"), pw && "password changed"].filter(Boolean) : [];
       if (newRole) {
         ROLES.push({ name: newRole, desc: "Added from the Users page" });
-        GRANTS[newRole] = ["view"]; // view-only until permissions are given on Roles & Permissions
+        GRANTS[newRole] = ["monitor.view"]; // view-only until permissions are given on Roles & Permissions
         saveRoles(); saveGrants();
         logActivity("role", `Added role ${newRole} (typed on the Users page) with view-only access`);
       }
@@ -2167,16 +2656,21 @@
     });
 
     function viewUser(u) {
-      const perms = grantsOf(u.role).map((k) => PERMISSIONS.find((p) => p.key === k).label);
+      // one line per area: "Motors — View, Create, Update"
+      const g = grantsOf(u.role);
+      const perms = AREAS.map((a) => [a.label, ACTIONS.filter(([k]) => g.includes(`${a.key}.${k}`)).map(([, l]) => l)]).filter(([, acts]) => acts.length);
       const d = viewDialog({
         title: u.name, sub: `${u.username} · ${u.email}`,
         rows: [["Role", roleBadge(u.role)], ["Status", u.active ? "Active" : "Disabled"], ["Last sign-in", esc(fmtLogin(u.lastLogin))]],
-        body: `<div><div class="detail-title">What this role can do <a class="link-btn" href="roles.html" style="margin-left:6px">Edit permissions</a></div><ul class="perm-list">${perms.map((p) => `<li>${ico("checkCircle")}${esc(p)}</li>`).join("")}</ul></div>`,
-        actions: `<button type="button" class="btn btn-primary" data-v-edit>${ico("edit")}Edit</button>`
+        body: `<div><div class="detail-title">What this role can do <a class="link-btn" href="roles.html" style="margin-left:6px">Edit permissions</a></div><ul class="perm-list">${perms.map(([area, acts]) => `<li>${ico("checkCircle")}<span><b>${esc(area)}</b> · ${esc(acts.join(", "))}</span></li>`).join("")}</ul></div>`,
+        actions: can("users.update") ? `<button type="button" class="btn btn-primary" data-v-edit>${ico("edit")}Edit</button>` : ""
       });
-      d.querySelector("[data-v-edit]").addEventListener("click", () => { d.close(); open(u); });
+      const ed = d.querySelector("[data-v-edit]");
+      if (ed) ed.addEventListener("click", () => { d.close(); open(u); });
     }
     async function removeUser(u) {
+      if (!allowed("users.delete")) return;
+      if (u.role === ADMIN_ROLE && !isAdmin()) { toast("Only an Administrator can delete an Administrator's account"); return; }
       if (!(await confirmDialog({ title: `Delete ${u.name}?`, message: `${u.username} will no longer be able to sign in. This cannot be undone.`, confirmLabel: "Delete user" }))) return;
       USERS = USERS.filter((x) => x !== u); saveUsers(); logActivity("user", `Deleted user ${u.username} (${u.name}, ${u.role})`); toast(`${u.name} deleted`); render();
     }
@@ -2196,64 +2690,91 @@
   }
 
   /* =========================================================
-     Page: Roles & Permissions — add / edit / delete roles, tick permissions
-     Administrator is a system role: always full access, can't be renamed or deleted.
+     Page: Roles & Permissions — roles, and a View / Create / Update / Delete grid per role.
+     Administrator is a system role: always full access, can't be renamed, deleted or changed.
      ========================================================= */
-  function pageRoles() {
-    const dlg = $("#roleDialog"), form = $("#roleForm"), err = $("#rfError");
-    let editing = null;
-    const snapshot = () => JSON.parse(JSON.stringify(Object.fromEntries(ROLES.map((r) => [r.name, grantsOf(r.name)]))));
-    let draft = snapshot();
-    const dirty = () => ROLES.some((r) => [...(draft[r.name] || [])].sort().join() !== grantsOf(r.name).sort().join());
-    const isLocked = (p, role) => role === ADMIN_ROLE || p.locked === "all" || p.locked === role;
-    const lockNote = (p) => (p.locked === "all" ? "Always on" : p.locked ? `Always on for ${p.locked}` : "");
+  // the grid for one role: a row per area, a column per action ("—" where the action doesn't exist)
+  function permGrid(have, editable) {
+    return `<div class="table-wrap"><table class="table crud-table">
+      <thead><tr><th>Area</th>${ACTIONS.map(([, l]) => `<th class="crud-col">${l}</th>`).join("")}</tr></thead>
+      <tbody>${AREAS.map((a) => `<tr>
+        <td class="crud-area"><b>${esc(a.label)}</b><small>${esc(Object.values(a.does)[0])}</small></td>
+        ${ACTIONS.map(([k, l]) => {
+          const key = `${a.key}.${k}`, p = PERMISSIONS.find((x) => x.key === key);
+          if (!p) return `<td class="crud-cell na"><span title="Not used for ${esc(a.label)}">—</span></td>`;
+          const lock = !editable || !!p.locked;
+          return `<td class="crud-cell"><label class="perm-check${lock ? " locked" : ""}" title="${esc(a.does[k])}${p.locked ? " · always on" : ""}">
+            <input type="checkbox" data-perm="${key}" ${have.includes(key) || p.locked ? "checked" : ""} ${lock ? "disabled" : ""} aria-label="${esc(a.label)} · ${l}: ${esc(a.does[k])}"><span>${ico("check")}</span></label></td>`;
+        }).join("")}</tr>`).join("")}</tbody></table></div>`;
+  }
+  // tick rules: Create / Update / Delete bring View with them; removing View clears the rest of the row
+  function permGridTick(root, cb) {
+    const [area, act] = cb.dataset.perm.split(".");
+    const box = (k) => root.querySelector(`input[data-perm="${area}.${k}"]`);
+    if (act !== "view" && cb.checked && box("view")) box("view").checked = true;
+    if (act === "view" && !cb.checked) ACTIONS.forEach(([k]) => { const x = box(k); if (x && !x.disabled) x.checked = false; });
+  }
+  const gridKeys = (root) => withViews($$("input[data-perm]:checked", root).map((c) => c.dataset.perm));
+  const sameKeys = (a, b) => [...a].sort().join() === [...b].sort().join();
+  const permDiff = (was, now) => {
+    const add = now.filter((k) => !was.includes(k)).map(permLabel), rem = was.filter((k) => !now.includes(k)).map(permLabel);
+    return [add.length ? `granted: ${add.join(", ")}` : "", rem.length ? `removed: ${rem.join(", ")}` : ""].filter(Boolean).join(" — ");
+  };
 
-    const render = () => {
+  function pageRoles() {
+    const dlg = $("#roleDialog"), form = $("#roleForm"), err = $("#rfError"), grid = $("#permGrid");
+    let editing = null;
+    let current = (ROLES.find((r) => r.name !== ADMIN_ROLE) || ROLES[0]).name; // role shown in the grid
+    const snapshot = () => Object.fromEntries(ROLES.map((r) => [r.name, grantsOf(r.name)]));
+    let draft = snapshot();
+    const changed = (name) => !sameKeys(draft[name] || [], grantsOf(name));
+    const editable = () => current !== ADMIN_ROLE && can("roles.update");
+
+    // everything except the grid itself, so ticking a box keeps keyboard focus
+    const renderTop = () => {
       $("#roleCount").textContent = `${ROLES.length} role${ROLES.length === 1 ? "" : "s"}`;
       $("#roleCards").innerHTML = ROLES.map((r) => {
         const n = USERS.filter((u) => u.role === r.name).length, g = (draft[r.name] || []).length, sys = r.name === ADMIN_ROLE;
-        return `<div class="card role-card">
+        return `<div class="card role-card${r.name === current ? " is-current" : ""}">
           <div class="role-top">${roleBadge(r.name)}<span class="muted">${n} user${n === 1 ? "" : "s"}</span></div>
           <p>${esc(r.desc || "—")}</p>
           <div class="role-meter"><span class="bar"><i style="width:${((g / PERMISSIONS.length) * 100).toFixed(0)}%"></i></span><span class="num">${g} / ${PERMISSIONS.length}</span></div>
           <div class="role-actions">
-            <a class="btn btn-sm" href="users.html?role=${encodeURIComponent(r.name)}">${ico("users")}Users</a>
-            ${sys ? `<span class="role-sys" title="The Administrator role always has full access">${ico("lock")}System role</span>` : `
+            <button type="button" class="btn btn-sm" data-rshow="${esc(r.name)}">${ico("key")}Permissions</button>
+            <a class="btn btn-sm btn-ghost" href="users.html?role=${encodeURIComponent(r.name)}" title="Users with this role">${ico("users")}</a>
+            ${sys ? `<span class="role-sys" title="The Administrator role always has full access">${ico("lock")}System</span>` : `
             <button type="button" class="btn btn-sm btn-ghost" data-redit="${esc(r.name)}" aria-label="Edit ${esc(r.name)}" title="Edit">${ico("edit")}</button>
             <button type="button" class="btn btn-sm btn-ghost btn-danger" data-rdel="${esc(r.name)}" aria-label="Delete ${esc(r.name)}" title="Delete">${ico("trash")}</button>`}
           </div>
         </div>`;
       }).join("");
-      $("#permHead").innerHTML = `<th>Permission</th>` + ROLES.map((r) => `<th class="perm-col"><span>${esc(r.name)}</span></th>`).join("");
-      $("#permRows").innerHTML = PERMISSIONS.map((p) => `<tr>
-        <td data-label="Permission">${esc(p.label)}${lockNote(p) ? `<small class="perm-note">${esc(lockNote(p))}</small>` : ""}</td>
-        ${ROLES.map((r) => {
-          const locked = isLocked(p, r.name), on = (draft[r.name] || []).includes(p.key);
-          return `<td data-label="${esc(r.name)}" class="perm-cell"><label class="perm-check${locked ? " locked" : ""}" title="${esc(r.name)} · ${esc(p.label)}">
-            <input type="checkbox" data-role="${esc(r.name)}" data-perm="${p.key}" ${on ? "checked" : ""} ${locked ? "disabled" : ""}><span>${ico("check")}</span></label></td>`;
-        }).join("")}</tr>`).join("");
-      const d = dirty();
+      $("#permRoles").innerHTML = ROLES.map((r) => `<button type="button" class="role-tab${r.name === current ? " on" : ""}" data-rtab="${esc(r.name)}" aria-pressed="${r.name === current}">${esc(r.name)}${changed(r.name) ? ' <i class="tab-dot" title="Unsaved changes"></i>' : ""}</button>`).join("")
+        + (can("roles.create") ? `<button type="button" class="role-tab add" data-rnew>${ico("plus")}Custom role</button>` : "");
+      $("#permNote").textContent = current === ADMIN_ROLE ? "Administrator always has every permission and can't be changed."
+        : !can("roles.update") ? "Your role can see these permissions but not change them."
+        : `What people with the ${current} role may do · Create, Update and Delete include View.`;
+      const d = ROLES.some((r) => changed(r.name));
       $("#permDirty").hidden = !d; $("#permSave").disabled = !d;
     };
+    const render = () => { if (!ROLES.some((r) => r.name === current)) current = ROLES[0].name; grid.innerHTML = permGrid(draft[current] || [], editable()); renderTop(); };
 
     // ----- add / edit role (name, description, permissions) -----
     function open(role) {
+      if (!allowed(role ? "roles.update" : "roles.create")) return;
       editing = role || null;
       form.reset(); err.classList.remove("show");
       $("#rTitle").textContent = role ? `Edit role · ${role.name}` : "Add role";
       $("#rSave").textContent = role ? "Save role" : "Add role";
       form.elements.name.value = role ? role.name : "";
       form.elements.desc.value = role ? role.desc || "" : "";
-      const have = role ? draft[role.name] || [] : ["view"];
-      $("#rPerms").innerHTML = PERMISSIONS.map((p) => {
-        const locked = p.locked === "all" || (role && p.locked === role.name);
-        const forAdminOnly = p.locked && p.locked !== "all"; // e.g. user administration stays with Administrator
-        return `<label class="check perm-row${locked || forAdminOnly ? " locked" : ""}">
-          <input type="checkbox" name="perm" value="${p.key}" ${have.includes(p.key) || locked ? "checked" : ""} ${locked || forAdminOnly ? "disabled" : ""}>
-          <span>${esc(p.label)}${locked ? ` <small class="perm-note">${esc(lockNote(p))}</small>` : forAdminOnly ? ` <small class="perm-note">Administrator only</small>` : ""}</span></label>`;
-      }).join("");
+      // a custom role can start as a copy of another role (only when adding)
+      $("#rFromBox").hidden = !!role;
+      form.elements.from.innerHTML = `<option value="">Blank · view live readings only</option>` + ROLES.map((r) => `<option>${esc(r.name)}</option>`).join("");
+      $("#rPerms").innerHTML = permGrid(role ? draft[role.name] || [] : ["monitor.view"], true);
       dlg.showModal();
     }
+    form.elements.from.addEventListener("change", (e) => { $("#rPerms").innerHTML = permGrid(e.target.value ? grantsOf(e.target.value) : ["monitor.view"], true); });
+    $("#rPerms").addEventListener("change", (e) => { const cb = e.target.closest("input[data-perm]"); if (cb) permGridTick($("#rPerms"), cb); });
     $("#rAll").addEventListener("click", () => $$("#rPerms input:not(:disabled)").forEach((c) => (c.checked = true)));
     $("#rNone").addEventListener("click", () => $$("#rPerms input:not(:disabled)").forEach((c) => (c.checked = false)));
     form.addEventListener("submit", (e) => {
@@ -2263,29 +2784,30 @@
       if (name.length < 2 || name.length > 30) return fail("Role name: 2–30 characters.");
       if (!/^[A-Za-z0-9 &/_-]+$/.test(name)) return fail("Role name: letters, numbers, spaces, & / _ - only.");
       if (ROLES.some((r) => r !== editing && r.name.toLowerCase() === name.toLowerCase())) return fail(`A role called ${name} already exists.`);
-      const perms = [...new Set(["view", ...$$("#rPerms input:checked").map((c) => c.value)])];
+      const perms = gridKeys($("#rPerms"));
       const oldName = editing ? editing.name : null, oldPerms = editing ? grantsOf(editing.name) : [];
       if (editing) {
-        const old = editing.name;
-        if (old !== name) {
-          USERS.forEach((u) => { if (u.role === old) u.role = name; });
-          delete GRANTS[old]; delete draft[old];
+        if (oldName !== name) {
+          USERS.forEach((u) => { if (u.role === oldName) u.role = name; });
+          delete GRANTS[oldName]; delete draft[oldName];
           saveUsers();
         }
         editing.name = name; editing.desc = desc;
       } else ROLES.push({ name, desc });
-      GRANTS[name] = perms; draft[name] = perms.slice();
+      GRANTS[name] = perms; draft[name] = grantsOf(name);
+      current = name;
       saveRoles(); saveGrants(); applyPerms();
-      const added = perms.filter((k) => !oldPerms.includes(k)).map((k) => PERMISSIONS.find((p) => p.key === k)?.label || k), removed = oldPerms.filter((k) => !grantsOf(name).includes(k)).map((k) => PERMISSIONS.find((p) => p.key === k)?.label || k);
-      logActivity("role", editing ? `Edited role ${name}${oldName !== name ? ` (renamed from ${oldName})` : ""}${added.length ? ` — granted: ${added.join(", ")}` : ""}${removed.length ? ` — removed: ${removed.join(", ")}` : ""}${oldName === name && !added.length && !removed.length ? " — no permission changes" : ""}`
-        : `Added role ${name} with ${grantsOf(name).length} permission${grantsOf(name).length === 1 ? "" : "s"}: ${grantsOf(name).map((k) => PERMISSIONS.find((p) => p.key === k)?.label || k).join(", ")}`);
+      const diff = permDiff(oldPerms, grantsOf(name));
+      logActivity("role", editing ? `Edited role ${name}${oldName !== name ? ` (renamed from ${oldName})` : ""}${diff ? ` — ${diff}` : oldName === name ? " — no permission changes" : ""}`
+        : `Added role ${name} with ${grantsOf(name).length} permissions: ${grantsOf(name).map(permLabel).join(", ")}`);
       dlg.close(); toast(editing ? `Role ${name} saved` : `Role ${name} added`);
       render();
     });
     async function removeRole(role) {
+      if (!allowed("roles.delete")) return;
       const n = USERS.filter((u) => u.role === role.name).length;
       if (n) {
-        await confirmDialog({ title: `${role.name} is in use`, message: `${n} user${n === 1 ? " has" : "s have"} this role. Move ${n === 1 ? "them" : "them"} to another role on the Users page, then delete it.`, confirmLabel: "OK", danger: false });
+        await confirmDialog({ title: `${role.name} is in use`, message: `${n} user${n === 1 ? " has" : "s have"} this role. Move ${n === 1 ? "that user" : "them"} to another role on the Users page, then delete it.`, confirmLabel: "OK", danger: false });
         return;
       }
       if (!(await confirmDialog({ title: `Delete role ${role.name}?`, message: "The role and its permissions are removed. This cannot be undone.", confirmLabel: "Delete role" }))) return;
@@ -2296,28 +2818,32 @@
 
     $("#addRole").addEventListener("click", () => open());
     $("#roleCards").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-redit],[data-rdel]"); if (!b) return;
-      const role = ROLES.find((r) => r.name === (b.dataset.redit || b.dataset.rdel));
-      if (role) (b.dataset.redit ? open(role) : removeRole(role));
+      const b = e.target.closest("[data-redit],[data-rdel],[data-rshow]"); if (!b) return;
+      const role = ROLES.find((r) => r.name === (b.dataset.redit || b.dataset.rdel || b.dataset.rshow)); if (!role) return;
+      if (b.dataset.rshow) { current = role.name; render(); $("#permCard").scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" }); }
+      else if (b.dataset.redit) open(role); else removeRole(role);
     });
-    // ----- permission matrix (tick, then Save) -----
-    $("#permRows").addEventListener("change", (e) => {
+    $("#permRoles").addEventListener("click", (e) => {
+      if (e.target.closest("[data-rnew]")) { open(); return; }
+      const b = e.target.closest("[data-rtab]"); if (b) { current = b.dataset.rtab; render(); }
+    });
+    // ----- the grid: tick, then Save (changes for several roles can be saved together) -----
+    grid.addEventListener("change", (e) => {
       const cb = e.target.closest("input[data-perm]"); if (!cb) return;
-      const list = draft[cb.dataset.role] || [];
-      draft[cb.dataset.role] = cb.checked ? [...new Set([...list, cb.dataset.perm])] : list.filter((k) => k !== cb.dataset.perm);
-      render();
+      permGridTick(grid, cb);
+      draft[current] = gridKeys(grid);
+      renderTop();
     });
     $("#permSave").addEventListener("click", () => {
-      const diff = ROLES.map((r) => {
-        const was = grantsOf(r.name), now = draft[r.name] || [];
-        const add = now.filter((k) => !was.includes(k)).map((k) => PERMISSIONS.find((p) => p.key === k)?.label || k), rem = was.filter((k) => !now.includes(k)).map((k) => PERMISSIONS.find((p) => p.key === k)?.label || k);
-        return add.length || rem.length ? `${r.name}: ${[add.length ? `+ ${add.join(", ")}` : "", rem.length ? `− ${rem.join(", ")}` : ""].filter(Boolean).join(" ")}` : "";
-      }).filter(Boolean);
+      if (!allowed("roles.update")) return;
+      const diff = ROLES.filter((r) => changed(r.name)).map((r) => `${r.name}: ${permDiff(grantsOf(r.name), draft[r.name])}`);
+      ROLES.forEach((r) => { if (r.name !== ADMIN_ROLE) GRANTS[r.name] = (draft[r.name] || []).slice(); });
+      saveGrants(); applyPerms();
       logActivity("role", `Saved permissions — ${diff.join("; ")}`);
-      ROLES.forEach((r) => (GRANTS[r.name] = (draft[r.name] || []).slice()));
-      saveGrants(); applyPerms(); render(); toast("Permissions saved");
+      draft = snapshot(); render(); toast("Permissions saved");
     });
     $("#permReset").addEventListener("click", async () => {
+      if (!allowed("roles.update")) return;
       if (!(await confirmDialog({ title: "Reset permissions?", message: "Built-in roles go back to their default permissions. Roles you added are not changed.", confirmLabel: "Reset", danger: false }))) return;
       Object.keys(DEFAULT_GRANTS).forEach((k) => { if (ROLES.some((r) => r.name === k)) GRANTS[k] = DEFAULT_GRANTS[k].slice(); });
       saveGrants(); draft = snapshot();
@@ -2369,14 +2895,7 @@
     $("#actCsv").addEventListener("click", () => {
       const list = filtered();
       if (!list.length) { toast("Nothing to download — change the filters"); return; }
-      const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-      const lines = [["Time", "User", "Username", "Role", "Category", "Activity"], ...list.map((e) => [when(e.t), e.user, e.username, e.role, ACT_CATS[e.cat] || e.cat, e.text])];
-      const blob = new Blob(["\ufeff" + lines.map((l) => l.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-      const a = document.createElement("a"), d = new Date(), pad = (n) => String(n).padStart(2, "0");
-      a.href = URL.createObjectURL(blob);
-      a.download = `tractiontherm-activity-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      saveCsv([["Time", "User", "Username", "Role", "Category", "Activity"], ...list.map((e) => [when(e.t), e.user, e.username, e.role, ACT_CATS[e.cat] || e.cat, e.text])], `tractiontherm-activity-${fileStamp()}.csv`);
       logActivity("report", `Downloaded the activity log CSV — ${list.length} entries`);
       toast(`Downloaded ${list.length} entries`);
       render();
@@ -2427,8 +2946,9 @@
     initTheme();
     const page = document.body.dataset.page;
     if (page !== "login" && !currentUser()) { location.replace("index.html"); return; }
-    if ((page === "users" || page === "roles") && !can("users")) { location.replace("dashboard.html"); return; }
-    if (page === "activity" && !can("activity")) { location.replace("dashboard.html"); return; }
+    // a page needs its area's View permission
+    const PAGE_VIEW = { motors: "motors.view", devices: "devices.view", settings: "limits.view", reports: "reports.view", activity: "activity.view", users: "users.view", roles: "roles.view" };
+    if (PAGE_VIEW[page] && !can(PAGE_VIEW[page])) { location.replace("dashboard.html"); return; }
     if (page === "login") store.set(SESSION_KEY, null);
     initShell();
     applyPerms();
@@ -2438,7 +2958,6 @@
     if (render) rerender = render;
     animateValues();
     if (!calm.matches) { document.body.classList.add("anim-in"); setTimeout(() => document.body.classList.remove("anim-in"), 1600); }
-    paintLimitText();
     if (page !== "login") updateAlertCount();
     if (render) setInterval(() => { tick(); render(); animateValues(); }, STEP_MS);
     else if (page !== "login") setInterval(tick, STEP_MS);

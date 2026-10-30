@@ -53,7 +53,7 @@
       <div class="page-head">
         <div>
           <h2>Devices</h2>
-          <p>Register the monitoring devices in the shed · each checks up to 2 motors at a time and queues the rest.</p>
+          <p>Register the monitoring devices in the shed · each checks up to 2 motors at a time, one per channel · select a device to see all its motors.</p>
         </div>
         <div class="actions">
           <button class="btn btn-ghost" id="resetDemo" type="button"><i data-icon="refresh"></i>Reset demo</button>
@@ -84,6 +84,19 @@
           </table>
         </div>
       </section>
+
+      <section class="card" id="devMotors" hidden>
+        <div class="card-head">
+          <div><h3 id="dmTitle">Motors</h3><div class="sub" id="dmSub"></div></div>
+          <div class="toolbar" id="dmActions"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="table responsive motor-table">
+            <thead><tr><th>Motor / Stator No.</th><th class="col-mid">Model / locomotive</th><th>Channel / test</th><th class="num">DE °C</th><th class="num">NDE °C</th><th class="num col-opt">TA °C</th><th>Condition</th><th>Monitoring</th><th class="num">Actions</th></tr></thead>
+            <tbody id="dmRows"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -92,7 +105,7 @@
 <dialog class="modal" id="deviceDialog" aria-labelledby="dlgTitle">
   <form id="deviceForm" method="dialog" style="display:contents">
     <div class="modal-head">
-      <div><h3 id="dlgTitle">Add new device</h3><p id="dlgSub">Register a monitoring device. Motors are assigned to it from the Motors page.</p></div>
+      <div><h3 id="dlgTitle">Add new device</h3><p id="dlgSub">Register a monitoring device. Then switch it on from Monitor, or assign motors to it.</p></div>
       <button type="button" class="icon-btn" aria-label="Close" onclick="this.closest('dialog').close()"><i data-icon="x"></i></button>
     </div>
 

@@ -68,14 +68,26 @@
 
       <section class="card motor-live-card" id="motorLive">
         <div class="card-head">
-          <div><h3>Live view</h3><div class="sub" id="animSub"></div></div>
+          <div><h3>3D view</h3><div class="sub" id="animSub"></div></div>
           <div id="animPill"></div>
         </div>
-        <div class="motor-anim" id="motorAnim"></div>
+        <div class="scene" id="motorScene" role="img" aria-label="3D view of this motor and its device">
+          <div class="scene-legend"><span><i style="background:var(--series-1)"></i>DE probe</span><span><i style="background:var(--series-2)"></i>NDE probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
+        </div>
       </section>
 
 
       <section class="card motor-hero-card" id="motorHero" aria-live="polite"></section>
+
+      <section class="card motor-detail" id="histCard">
+        <div class="card-head"><div><h3>Test history</h3><div class="sub" id="histSub"></div></div></div>
+        <div class="table-wrap">
+          <table class="table responsive hist-table">
+            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max DE °C</th><th class="num">Max NDE °C</th><th class="num">Max rise K</th><th>Result</th></tr></thead>
+            <tbody id="histRows"></tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="card motor-detail" id="rtCard">
         <div class="card-head">
