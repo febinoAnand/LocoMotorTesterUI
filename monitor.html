@@ -17,15 +17,16 @@
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="monitor.html" aria-current="page"><i data-icon="activity"></i>Monitor</a>
-      <a href="reports.html"><i data-icon="report"></i>Reports</a>
+      <a href="reports.html"><i data-icon="report"></i>Results</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
-      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
+      <div class="nav-label nav-sys">System</div>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -53,7 +54,7 @@
       <div class="page-head">
         <div>
           <h2>Monitor</h2>
-          <p>Live widgets for every device · press Switch on to start reading a free channel straight away · click a motor to open its live view and full analysis.</p>
+          <p>Live widgets for every device · press Switch on to start reading a free channel straight away · click a device to open it · click a motor to open its live view and full analysis.</p>
         </div>
         <div class="actions">
           <div class="segmented" role="radiogroup" aria-label="Show devices">
@@ -62,16 +63,6 @@
           </div>
         </div>
       </div>
-
-      <section class="card scene-card" id="sceneCard">
-        <div class="card-head">
-          <div><h3>3D view</h3><div class="sub">A device and the motors on its channels · click a motor's label to open it</div></div>
-          <div class="role-tabs scene-tabs" id="sceneTabs" role="group" aria-label="Device to show"></div>
-        </div>
-        <div class="scene" id="scene" role="img" aria-label="3D view of the device and its motors">
-          <div class="scene-legend"><span><i style="background:var(--series-1)"></i>DE probe</span><span><i style="background:var(--series-2)"></i>NDE probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
-        </div>
-      </section>
 
       <section aria-label="Devices">
         <div class="grid grid-devices" id="monitorGrid"></div>

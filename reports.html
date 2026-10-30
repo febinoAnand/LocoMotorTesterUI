@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reports · TractionTherm</title>
+  <title>Results · TractionTherm</title>
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body data-page="reports">
@@ -17,15 +17,16 @@
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
-      <a href="reports.html" aria-current="page"><i data-icon="report"></i>Reports</a>
+      <a href="reports.html" aria-current="page"><i data-icon="report"></i>Results</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
-      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
+      <div class="nav-label nav-sys">System</div>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -39,7 +40,7 @@
   <div class="main">
     <header class="topbar">
       <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
-      <div class="topbar-title"><div class="crumbs">Monitoring</div><h1>Reports</h1></div>
+      <div class="topbar-title"><div class="crumbs">Monitoring</div><h1>Results</h1></div>
       <div class="topbar-actions">
         <span class="clock num" data-clock></span>
         <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
@@ -53,15 +54,17 @@
       <div class="page-head">
         <div>
           <a class="back-link" id="repBack" href="monitor.html" hidden>&larr; Back</a>
-          <h2>Reports</h2>
-          <p>Choose filters, check the preview, then download the report as CSV or print it as PDF.</p>
+          <h2>Results</h2>
+          <p>Choose filters, check the preview, then download the results as CSV or print them as PDF.</p>
         </div>
         <div class="actions">
-          <button class="btn" type="button" data-dl-all-motors title="Every motor's full report (details, aggregation, all readings) in one CSV"><i data-icon="download"></i>All motor reports</button>
+          <button class="btn" type="button" data-dl-all-motors title="Every motor's full results (details, aggregation, all readings) in one CSV"><i data-icon="download"></i>All motor results</button>
           <button class="btn" type="button" id="repPrint"><i data-icon="printer"></i>Print / PDF</button>
           <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i>Download CSV</button>
         </div>
       </div>
+
+      <section class="card rep-mcard" id="repMotorCard" aria-label="Motor" hidden></section>
 
       <section class="card">
         <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
@@ -83,9 +86,9 @@
               </select>
               <div class="input-icon"><i data-icon="search"></i>
                 <input class="input" id="r-search" name="search" type="search" autocomplete="off" placeholder="Search test ID, motor, stator no., model, locomotive, device, location or reason"></div></div></div>
-          <div class="field"><label for="r-type">Report</label>
+          <div class="field"><label for="r-type">Results</label>
             <select class="select" id="r-type" name="type">
-              <option value="summary">Condition summary (one row per motor)</option>
+              <option value="summary">Test results (one row per test)</option>
               <option value="readings">Temperature readings (log)</option>
             </select></div>
           <div class="field"><label for="r-dev">Device</label><select class="select" id="r-dev" name="device"></select></div>
@@ -117,7 +120,7 @@
             <div class="rules-head">
               <div>
                 <div class="label">Custom rules</div>
-                <span class="hint">Narrow the report by temperature, condition or motor details · temperatures in °C, rise in K</span>
+                <span class="hint">Narrow the results by temperature, condition or motor details · temperatures in °C, rise in K</span>
               </div>
               <div class="segmented" id="ruleModeBox" role="radiogroup" aria-label="Rows must match" hidden>
                 <input type="radio" name="ruleMode" id="rm-all" value="all" checked><label for="rm-all">Match all rules</label>
@@ -134,7 +137,7 @@
         </form>
       </section>
 
-      <section class="card summary-strip" id="repSummary" aria-label="Report summary"></section>
+      <section class="card summary-strip" id="repSummary" aria-label="Results summary"></section>
 
       <section class="card report-card">
         <div class="card-head"><div><h3 id="repTitle">Preview</h3><div class="sub" id="repMeta"></div></div></div>
