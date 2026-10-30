@@ -17,15 +17,16 @@
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="monitor.html" aria-current="page"><i data-icon="activity"></i>Monitor</a>
-      <a href="reports.html"><i data-icon="report"></i>Reports</a>
+      <a href="reports.html"><i data-icon="report"></i>Results</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
       <a href="motors.html"><i data-icon="motor"></i>Motors</a>
-      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label nav-admin">Administration</div>
       <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
       <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
       <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
+      <div class="nav-label nav-sys">System</div>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
       <div class="nav-label">Account</div>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
@@ -57,8 +58,8 @@
           <p>Live view of one motor · readings refresh every sample.</p>
         </div>
         <div class="actions">
-          <a class="btn" id="mpReport" href="reports.html"><i data-icon="report"></i>Report</a>
-          <button class="btn btn-primary" id="mpDownload" type="button"><i data-icon="download"></i>Download report</button>
+          <a class="btn" id="mpResults" href="reports.html"><i data-icon="report"></i>Test results</a>
+          <button class="btn btn-primary" id="mpDownload" type="button"><i data-icon="download"></i>Download test results</button>
           <label class="sr-only" for="mpSwitch">Show another motor</label>
           <select class="select" id="mpSwitch" style="width:auto;min-width:210px"></select>
         </div>
@@ -68,26 +69,15 @@
 
       <section class="card motor-live-card" id="motorLive">
         <div class="card-head">
-          <div><h3>3D view</h3><div class="sub" id="animSub"></div></div>
+          <div><h3>Live view</h3><div class="sub" id="animSub"></div></div>
           <div id="animPill"></div>
         </div>
-        <div class="scene" id="motorScene" role="img" aria-label="3D view of this motor and its device">
+        <div class="scene" id="motorScene" role="img" aria-label="3D view of this motor on its device">
           <div class="scene-legend"><span><i style="background:var(--series-1)"></i>DE probe</span><span><i style="background:var(--series-2)"></i>NDE probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
         </div>
       </section>
 
-
       <section class="card motor-hero-card" id="motorHero" aria-live="polite"></section>
-
-      <section class="card motor-detail" id="histCard">
-        <div class="card-head"><div><h3>Test history</h3><div class="sub" id="histSub"></div></div></div>
-        <div class="table-wrap">
-          <table class="table responsive hist-table">
-            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max DE °C</th><th class="num">Max NDE °C</th><th class="num">Max rise K</th><th>Result</th></tr></thead>
-            <tbody id="histRows"></tbody>
-          </table>
-        </div>
-      </section>
 
       <section class="card motor-detail" id="rtCard">
         <div class="card-head">
@@ -98,23 +88,10 @@
         <div class="card-body"><div class="chart" id="rtChart"></div></div>
       </section>
 
-      <section class="card motor-detail">
-        <div class="card-head">
-          <div><h3>Temperature trend</h3><div class="sub">Since monitoring started · dashed lines = heating-model prediction · hover for readings</div></div>
-          <div class="toolbar">
-            <div class="legend" id="runLegend"></div>
-            <div class="segmented" role="radiogroup" aria-label="Show">
-              <input type="radio" name="trendMode" id="tm-temp" value="temp" checked><label for="tm-temp">Temperature</label>
-              <input type="radio" name="trendMode" id="tm-rise" value="rise"><label for="tm-rise">Rise<span class="hide-xs"> above ambient</span></label>
-            </div>
-          </div>
-        </div>
-        <div class="card-body"><div class="chart" id="runChart"></div></div>
-      </section>
 
       <section class="card motor-detail" id="aggCard">
         <div class="card-head">
-          <div><h3>Aggregation</h3><div class="sub">Min, average and max per interval since the test started · bar = min → max, line = average · hover for values</div></div>
+          <div><h3>Aggregation</h3><div class="sub">Average per interval since the test started · DE, NDE and TA in one bar, one inside the other · hover for min and max</div></div>
           <div class="toolbar">
             <div class="legend"><span><i style="background:var(--series-1)"></i>DE</span><span><i style="background:var(--series-2)"></i>NDE</span><span><i style="background:var(--series-amb)"></i>TA</span></div>
             <div class="segmented" role="radiogroup" aria-label="Interval">
@@ -131,6 +108,16 @@
       <section class="card motor-detail" id="cmpCard">
         <div class="card-head"><div><h3>Compared with the other motor</h3><div class="sub" id="cmpSub"></div></div></div>
         <div class="card-body"><div class="chart" id="cmpChart"></div></div>
+      </section>
+
+      <section class="card motor-detail" id="histCard">
+        <div class="card-head"><div><h3>Test history</h3><div class="sub" id="histSub"></div></div></div>
+        <div class="table-wrap">
+          <table class="table responsive hist-table">
+            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max DE °C</th><th class="num">Max NDE °C</th><th class="num">Max rise K</th><th>Result</th><th class="hist-dl">Results</th></tr></thead>
+            <tbody id="histRows"></tbody>
+          </table>
+        </div>
       </section>
     </main>
   </div>
