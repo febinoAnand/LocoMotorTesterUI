@@ -53,7 +53,7 @@
       <div class="page-head">
         <div>
           <h2>Motor management</h2>
-          <p>Register traction motors and assign them to a device for monitoring · a device checks up to 2 motors at a time, the rest wait in its queue.</p>
+          <p>Register traction motors and assign them to a device for monitoring · a device checks up to 2 motors at a time, one per channel.</p>
         </div>
         <div class="actions">
           <button class="btn" type="button" data-dl-all-motors><i data-icon="download"></i>Download all reports</button>
@@ -68,12 +68,11 @@
           <div class="input-icon grow"><i data-icon="search"></i><input class="input" id="motorSearch" type="search" placeholder="Search motor ID, stator no., model or locomotive" aria-label="Search motors"></div>
           <select class="select" id="motorDevFilter" aria-label="Filter by device" style="width:auto;min-width:180px"></select>
           <select class="select" id="motorCondFilter" aria-label="Filter by condition" style="width:auto;min-width:160px">
-            <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option><option value="wait">Queued</option><option value="none">Not monitored</option>
+            <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option><option value="none">Not monitored</option>
           </select>
           <span class="muted" id="motorCount" style="font-size:13px"></span>
         </div>
       </section>
-
       <section class="card">
         <div class="table-wrap">
           <table class="table responsive motor-table">

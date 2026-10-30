@@ -53,7 +53,7 @@
       <div class="page-head">
         <div>
           <h2>Roles &amp; permissions</h2>
-          <p>Add, edit or delete roles and choose what each one may do · changes apply to everyone with that role.</p>
+          <p>Add, edit or delete roles and choose what each one may view, create, update and delete · changes apply to everyone with that role.</p>
         </div>
         <div class="actions">
           <a class="btn" href="users.html"><i data-icon="users"></i>Manage users</a>
@@ -64,29 +64,25 @@
       <div class="section-title"><h3>Roles</h3><span id="roleCount"></span></div>
       <section class="grid role-grid" id="roleCards" aria-label="Roles"></section>
 
-      <section class="card">
+      <section class="card" id="permCard">
         <div class="card-head">
-          <div><h3>Permissions</h3><div class="sub">Tick what each role may do · locked items are always on</div></div>
+          <div><h3>Permissions</h3><div class="sub" id="permNote"></div></div>
           <div class="toolbar">
             <span class="badge warn" id="permDirty" hidden>Unsaved changes</span>
             <button class="btn btn-sm btn-ghost" id="permReset" type="button"><i data-icon="refresh"></i>Reset defaults</button>
             <button class="btn btn-sm btn-primary" id="permSave" type="button" disabled>Save permissions</button>
           </div>
         </div>
-        <div class="table-wrap">
-          <table class="table perm-table">
-            <thead><tr id="permHead"></tr></thead>
-            <tbody id="permRows"></tbody>
-          </table>
-        </div>
+        <div class="role-tabs" id="permRoles" role="group" aria-label="Role to show"></div>
+        <div id="permGrid"></div>
       </section>
     </main>
   </div>
 </div>
-<dialog class="modal" id="roleDialog" aria-labelledby="rTitle">
+<dialog class="modal wide" id="roleDialog" aria-labelledby="rTitle">
   <form id="roleForm" novalidate style="display:contents">
     <div class="modal-head">
-      <div><h3 id="rTitle">Add role</h3><p>Name the role and tick what people with it may do.</p></div>
+      <div><h3 id="rTitle">Add role</h3><p>Name the role and tick what people with it may view, create, update and delete.</p></div>
       <button type="button" class="icon-btn" aria-label="Close" onclick="this.closest('dialog').close()"><i data-icon="x"></i></button>
     </div>
     <div class="modal-body">
@@ -94,11 +90,12 @@
       <div class="form-grid">
         <div class="field"><label for="r-name">Role name</label><input class="input" id="r-name" name="name" required maxlength="30" autocomplete="off" placeholder="e.g. Maintenance engineer"></div>
         <div class="field"><label for="r-desc">Description</label><input class="input" id="r-desc" name="desc" maxlength="90" placeholder="What this role is for"></div>
+        <div class="field" id="rFromBox"><label for="r-from">Start from</label><select class="select" id="r-from" name="from"></select><span class="hint">Copy another role's permissions, then adjust the ticks below</span></div>
       </div>
       <fieldset class="fieldset">
         <legend>Permissions</legend>
         <div class="perm-tools"><button type="button" class="link-btn" id="rAll">Select all</button><button type="button" class="link-btn" id="rNone">Clear</button></div>
-        <div id="rPerms" class="perm-rows"></div>
+        <div id="rPerms"></div>
       </fieldset>
     </div>
     <div class="modal-foot">
