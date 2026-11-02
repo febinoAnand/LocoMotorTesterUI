@@ -1075,7 +1075,7 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
 .cell-dev b, .cell-dev span, .motor-table .lead-cell b { white-space: nowrap; }
 .device-table td:nth-child(2), .motor-table td:nth-child(3) { white-space: nowrap; }
 @media (max-width: 1500px) { .row-actions .hide-sm { display: none; } }
-@media (max-width: 1400px) { .motor-table .col-opt, .device-table .col-opt { display: none; } }
+@media (max-width: 1640px) { .motor-table .col-opt, .device-table .col-opt { display: none; } }
 @media (max-width: 640px) {
   .device-table td:nth-child(2), .motor-table td:nth-child(3) { white-space: normal; }
 }
@@ -1084,18 +1084,19 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
    Access control: controls the signed-in role may not use are hidden
    ========================================================= */
 /* CRUD permissions: body.no-perm-<area>-<action> hides what the signed-in role may not do */
-.no-perm-motors-create [data-add-motor=""], .no-perm-motors-update [data-add-motor]:not([data-add-motor=""]), .no-perm-motors-update [data-edit-motor],
+.no-perm-motors-create [data-add-motor=""], .no-perm-motors-update [data-add-motor]:not([data-add-motor=""]), .no-perm-motors-update [data-edit-motor], .no-perm-motors-update [data-edit-test],
 .no-perm-motors-update [data-assign-motor], .no-perm-motors-delete [data-del-motor],
 .no-perm-devices-create #addDevice, .no-perm-devices-update [data-edit], .no-perm-devices-delete [data-del], .no-perm-devices-delete #resetDemo,
-.no-perm-limits-update [data-edit-limits], .no-perm-limits-update #termSave, .no-perm-limits-update #termReset,
+.no-perm-limits-update [data-edit-limits], .no-perm-limits-update #termSave, .no-perm-limits-update #termReset, .no-perm-limits-update #condSave, .no-perm-limits-update #condReset,
 .no-perm-reports-create #repCsv, .no-perm-reports-create #repPrint, .no-perm-reports-create #mpDownload, .no-perm-reports-create [data-dl-test], .no-perm-reports-create [data-dl-motor-tests], .no-perm-reports-create [data-dl-all-motors],
 .no-perm-monitoring-create .slot-on,
 .no-perm-users-create #addUser, .no-perm-roles-create #addRole, .no-perm-roles-update [data-redit], .no-perm-roles-delete [data-rdel],
 .no-perm-roles-update #permSave, .no-perm-roles-update #permReset,
-.no-perm-motors-view a[href^="motors.html"], .no-perm-devices-view a[href^="devices.html"], .no-perm-limits-view a[href^="settings.html"],
+.no-perm-motors-view a[href^="motors.html"], .no-perm-devices-view a[href^="devices.html"], .no-perm-devices-view a[href^="device.html"], .no-perm-limits-view a[href^="settings.html"],
 .no-perm-reports-view a[href^="reports.html"], .no-perm-users-view a[href^="users.html"], .no-perm-roles-view a[href^="roles.html"],
 .no-perm-activity-view a[href^="activity.html"], .no-admin-nav .nav-label.nav-admin, .no-perm-limits-view .nav-label.nav-sys { display: none !important; }
 .no-perm-monitoring-update .trigger { pointer-events: none; opacity: .55; }
+.no-perm-monitoring-update [data-channel], .no-perm-monitoring-update [data-terminals] { display: none; }
 
 /* monitoring on / off switch */
 .trigger { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); font: inherit; font-size: 12px; font-weight: 700; color: var(--text-2); cursor: pointer; white-space: nowrap; }
@@ -1338,6 +1339,8 @@ a.btn.is-disabled { opacity: .5; cursor: not-allowed; }
 
 /* reports → motor page; motor page download */
 .rep-motor { font-weight: 700; font-family: var(--mono); white-space: nowrap; }
+#repTest { border-top: 0; }
+.report-table tr.rep-open td { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
 .rep-motor:hover { text-decoration: underline; }
 @media print { .rep-motor { color: inherit; text-decoration: none; } }
 
@@ -1348,6 +1351,9 @@ a.btn.is-disabled { opacity: .5; cursor: not-allowed; }
 /* channels (2 per device) */
 .ch-tag { display: inline-block; margin-right: 4px; padding: 0 6px; border-radius: 5px; background: var(--text); color: var(--surface); font-size: 10px; font-weight: 800; letter-spacing: .04em; vertical-align: 1px; }
 .ch-tag:empty { display: none; }
+.ch-edit { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.ch-edit:hover { color: var(--primary); border-color: var(--primary); }
+.ch-edit svg { width: 13px; height: 13px; }
 
 /* motor page: real-time graph */
 .rt-stats { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: baseline; padding: 12px 20px 0; font-size: 13px; color: var(--text-2); }
@@ -1464,7 +1470,7 @@ body.anim-in .dq-row { animation: riseIn .45s ease-out both .15s; }
 #termError { margin: 16px 20px 0; }
 @media (max-width: 1100px) { .term-range-cell { min-width: 110px; width: auto; } .term-table .input-unit { max-width: 110px; } }
 @media (min-width: 641px) and (max-width: 1100px) {
-  .term-table th:nth-child(2), .term-table td:nth-child(2), .term-table th .muted { display: none; }
+  .term-table th .muted { display: none; }
 }
 @media (max-width: 640px) {
   .term-table .input-unit { max-width: 150px; }
@@ -1643,12 +1649,69 @@ a.scene-tag:hover { border-color: var(--primary); }
 
 /* motor page: test history (one motor, same stator, a new Test ID for every run) */
 .hist-table tr.is-current { background: var(--primary-soft); }
+.hist-table tr[data-test-row] { cursor: pointer; }
+.hist-table tr[data-test-row]:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+/* Test history: the graphs of the test picked in the table */
+.test-graphs { border-top: 1px solid var(--border); padding: 16px 20px 18px; display: grid; gap: 10px; min-width: 0; }
+.test-graphs[hidden] { display: none; }
+.tg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.tg-head .sub { margin-top: 4px; }
+.tg-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin-top: 6px; font-size: 14px; }
+.tg-title .muted { font-size: 12px; }
+.tg-none { margin: 4px 0 0; }
+/* narrow phones: a long page title takes two lines instead of being cut off */
+@media (max-width: 400px) { .topbar-title h1 { font-size: 15px; line-height: 1.15; white-space: normal; } }
+/* touch screens: a comfortable target for the small text link */
+@media (max-width: 1023px) { .mh-limits .link-btn { display: inline-block; padding: 7px 4px; margin: -7px 0; } }
+/* small laptops and tablets on their side: tighter tables so every column fits */
+@media (min-width: 1101px) and (max-width: 1280px) { .motor-table th, .motor-table td, .user-table th, .user-table td { padding-left: 5px; padding-right: 5px; font-size: 12.5px; } }
+/* laptops: every Motors column fits, the row buttons show their icons (names on hover) */
+@media (max-width: 1720px) { .motor-table .row-actions .hide-sm { display: none; } }
+/* Recent motor activity of one device (Monitor widget, device page) */
+.dev-activity { border-top: 1px solid var(--border); padding-top: 12px; }
+.dev-activity .dq-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 0 20px 8px; font-size: 13.5px; }
+.dev-activity .dq-head a { flex: none; font-size: 12.5px; font-weight: 600; }
+.act-dev-note { margin-top: 4px; font-weight: 600; color: var(--primary); }
+.ma-list { list-style: none; margin: 0; padding: 0; }
+.ma-list li + li { border-top: 1px solid var(--border); }
+.ma-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 11px 20px; color: inherit; text-decoration: none; font-size: 13.5px; }
+a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+.ma-text { min-width: 0; overflow-wrap: anywhere; }
+.ma-meta { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ma-empty { padding: 16px 20px; font-size: 13px; }
+@media (max-width: 640px) { .ma-row { flex-direction: column; gap: 3px; padding: 10px 16px; } }
+/* Settings: Motor conditions */
+#conditions { margin-bottom: 20px; scroll-margin-top: 84px; }
+.cond-table th { vertical-align: middle; }
+.cond-table th small { margin-left: 6px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.cond-table .verdict-pill { font-size: 11px; padding: 3px 9px; }
+.cond-table .lead-cell b { display: block; }
+.cond-table td.num .verdict-pill { margin-left: 8px; }
+.cond-note { margin: 0 20px 16px; }
+#condError { margin: 16px 20px 0; }
+/* Change terminals window */
+.tm-head, .tm-row { display: grid; grid-template-columns: 76px 74px minmax(0, 1fr); gap: 10px; align-items: center; }
+.tm-head { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.tm-row { padding: 6px 0; }
+.tm-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); min-width: 0; overflow-wrap: anywhere; }
+.tm-val { font-size: 14px; white-space: nowrap; }
+.tm-row .field { margin: 0; min-width: 0; }
+@media (max-width: 480px) { .tm-head { display: none; } .tm-head + .tm-row { margin-top: 0; } .tm-row { grid-template-columns: minmax(0, 1fr) auto; } .tm-row .field { grid-column: 1 / -1; } }
+/* Edit test window */
+.te-h { margin: 18px 0 10px; font-size: 13px; font-weight: 700; }
+.te-h:first-of-type { margin-top: 0; }
+.te-h small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.te-swap { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 13px; cursor: pointer; }
+.te-swap input { margin-top: 2px; flex: none; }
 .hist-table td .badge { margin-left: 6px; vertical-align: 1px; }
 .hist-table td:nth-child(3) { white-space: nowrap; }
 .hist-table th, .hist-table td { padding-left: 10px; padding-right: 10px; }
 .hist-table td:nth-child(2) { white-space: nowrap; }
 .hist-table .verdict-pill { font-size: 11px; padding: 3px 9px; }
 .hist-table .hist-dl { text-align: right; white-space: nowrap; }
+.tg-head .verdict-pill { font-size: 11px; padding: 3px 9px; vertical-align: 1px; }
+/* room for every column: the Download button shrinks to its icon */
+@media (max-width: 1500px) and (min-width: 761px) { #histCard .hist-dl .btn span { display: none; } #histCard .hist-table th, #histCard .hist-table td { padding-left: 6px; padding-right: 6px; } }
 @media (max-width: 1279px) {
   .hist-table thead { display: none; }
   .hist-table, .hist-table tbody, .hist-table tr, .hist-table td { display: block; width: 100%; }
@@ -1737,18 +1800,37 @@ a.scene-tag:hover { border-color: var(--primary); }
 .dv-free b { color: var(--text); font-size: 15px; }
 .dv-free .btn { margin-top: 8px; }
 .dv-free .btn svg { width: 14px; height: 14px; }
+/* Settings: sensor names */
+.term-table .term-input { width: 84px; padding: 7px 10px; font-weight: 700; text-align: left; }
+.term-table .term-input-wide { width: 100%; min-width: 156px; padding: 7px 10px; text-align: left; }
+.term-table .input-unit { min-width: 78px; }
+.term-table th, .term-table td { padding-left: 10px; padding-right: 10px; }
+.term-table .input-unit .input { padding-left: 8px; padding-right: 28px; }
+.term-table .input-unit span { right: 9px; }
+.term-table td:has(> .input-unit), .term-table th.num { white-space: nowrap; }
 /* Results: one motor chosen → its tests in order, each with its own download */
 .rep-mcard .card-head { flex-wrap: wrap; gap: 10px; }
 .rep-mcard .card-head > div:first-child { flex: 1 1 240px; min-width: 0; }
 .rep-mcard .card-head .sub, .rep-mcard .card-head h3 { white-space: normal; overflow-wrap: anywhere; }
-.rep-mcard .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.rep-tests { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-.rep-tests li { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--border); min-width: 0; }
-.rep-tests li > span { flex: 1; min-width: 0; font-size: 12.5px; }
+.rep-mcard .actions { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.rep-mcard .actions .btn { flex: 1 1 auto; min-width: 0; white-space: normal; }
+.rep-tests { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
+.rep-tests li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 18px; border-top: 1px solid var(--border); min-width: 0; }
+.rep-tests li > span { flex: 1 1 120px; min-width: 0; font-size: 12.5px; }
 .rep-tests-empty { padding: 12px 18px; margin: 0; }
+.rep-tests .hide-sm { display: none; }
+.rep-tests li { flex-wrap: nowrap; }
+.rep-tests li.is-open { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); box-shadow: inset 3px 0 0 var(--primary); }
 @media print { .rep-mcard .actions, .rep-tests .btn { display: none !important; } }
-/* Results: Open / Edit per row on screen only (not printed, not in the CSV) */
+/* Results: Download / Edit per row on screen only (not printed, not in the CSV) */
 .report-table .rep-act, .report-table .rep-act-h { white-space: nowrap; }
+/* the table is wide: the Test ID and the row's buttons stay in view while it scrolls sideways */
+@media (min-width: 641px) {
+  .report-table th:first-child, .report-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--border); }
+  .report-table thead th:first-child, .report-table thead .rep-act-h { background: var(--surface-2); }
+  .report-table .rep-act, .report-table .rep-act-h { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -1px 0 0 var(--border); }
+}
+@media print { .report-table th, .report-table td { position: static !important; box-shadow: none !important; } }
 @media print { .report-table .rep-act, .report-table .rep-act-h { display: none !important; } }
 /* Monitor page: a live 3D card per device; clicking it opens the device page */
 .mon-card { overflow: hidden; }

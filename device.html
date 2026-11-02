@@ -69,7 +69,7 @@
         <section class="card" id="dvSceneCard">
           <div class="card-head"><div><h3>Live view</h3><div class="sub">This device and its two motors · click a motor's label to open it</div></div></div>
           <div class="scene" id="dvScene" role="img" aria-label="3D view of this device and its motors">
-            <div class="scene-legend"><span><i style="background:var(--series-1)"></i>DE probe</span><span><i style="background:var(--series-2)"></i>NDE probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
+            <div class="scene-legend"><span><i style="background:var(--series-1)"></i><span data-sensor="1">T1</span> probe</span><span><i style="background:var(--series-2)"></i><span data-sensor="2">T2</span> probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
           </div>
         </section>
         <section class="card dv-info" id="dvInfo" aria-label="Device details"></section>
@@ -83,6 +83,11 @@
         </div>
         <div class="dv-split" id="dvSplit" aria-live="polite"></div>
         <section class="card" id="dvStoppedCard" hidden><div id="dvStopped"></div></section>
+        <section class="card" id="dvActivityCard" aria-label="Recent motor activity" hidden>
+          <div class="card-head"><div><h3 id="dvActivityTitle">Recent motor activity</h3><div class="sub">The last 5 motor and test events on this device</div></div>
+            <a class="btn btn-sm" id="dvActivityAll" href="activity.html">View all</a></div>
+          <ul class="ma-list" id="dvActivityList"></ul>
+        </section>
       </div>
     </main>
   </div>

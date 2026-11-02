@@ -66,6 +66,8 @@
 
       <section class="card rep-mcard" id="repMotorCard" aria-label="Motor" hidden></section>
 
+      <section class="card" id="repTestCard" aria-label="Test" hidden><div class="test-graphs" id="repTest"></div></section>
+
       <section class="card">
         <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
           <button class="btn btn-sm btn-ghost" type="button" id="repReset"><i data-icon="refresh"></i>Reset filters</button></div>
@@ -102,7 +104,7 @@
               <option value="all">All condition types</option>
               <option value="rise">Rise above ambient out of limits</option>
               <option value="temp">Motor temperature out of limits</option>
-              <option value="spread">DE / NDE difference out of limits</option>
+              <option value="spread" data-sensor-diff>T1 / T2 difference out of limits</option>
               <option value="pred" data-summary-only>Predicted final rise too high</option>
               <option value="partner" data-summary-only>Hotter than the other motor</option>
               <option value="term">Terminal min / max exceeded</option>

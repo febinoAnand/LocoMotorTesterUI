@@ -54,16 +54,32 @@
       <div class="page-head">
         <div>
           <h2>Settings</h2>
-          <p>Minimum and maximum limit for each terminal · a reading outside its range makes the motor Not OK.</p>
-        </div>
-        <div class="actions">
-          <button class="btn" type="button" data-edit-limits><i data-icon="alert"></i>Alarm limits</button>
+          <p>Set what counts as Good, Monitor and Not OK, and the minimum and maximum for each terminal.</p>
         </div>
       </div>
 
+      <section class="card" id="conditions">
+        <div class="card-head">
+          <div><h3>Motor conditions</h3><div class="sub">Set what counts as Good, Monitor and Not OK · applies to every motor as soon as you save</div></div>
+          <div class="toolbar">
+            <span class="badge warn" id="condDirty" hidden>Unsaved changes</span>
+            <button class="btn btn-sm btn-ghost" id="condReset" type="button"><i data-icon="refresh"></i>Reset defaults</button>
+            <button class="btn btn-sm btn-primary" id="condSave" type="button" disabled>Save conditions</button>
+          </div>
+        </div>
+        <div class="form-error" id="condError" role="alert"></div>
+        <div class="table-wrap">
+          <table class="table responsive term-table cond-table">
+            <thead id="condHead"></thead>
+            <tbody id="condRows"></tbody>
+          </table>
+        </div>
+        <p class="form-note cond-note"><i data-icon="alert"></i><span>A motor takes its worst check: it is Good only when every check is Good, and Not OK as soon as any one check reaches Not OK. So a motor can be Not OK below the temperature limit if its rise above ambient is too high. A motor also shows Monitor when its predicted final rise will reach the Not OK limit, and Not OK when a terminal goes outside the limits below.</span></p>
+      </section>
+
       <section class="card">
         <div class="card-head">
-          <div><h3>Terminal limits</h3><div class="sub">DE drive end and NDE non-drive end on the motor · TA ambient air · values in °C</div></div>
+          <div><h3>Terminal limits</h3><div class="sub">Rename the motor sensors and say what each one measures · TA ambient air · values in °C</div></div>
           <div class="toolbar">
             <span class="badge warn" id="termDirty" hidden>Unsaved changes</span>
             <button class="btn btn-sm btn-ghost" id="termReset" type="button"><i data-icon="refresh"></i>Reset defaults</button>
