@@ -65,7 +65,7 @@
         </div>
       </div>
 
-      <div class="card empty-state" id="mpEmpty" hidden><h3>Motor not found</h3><p>It may have been deleted or is not assigned to a device.</p><a class="btn btn-primary" href="monitor.html">Back to Monitor</a></div>
+      <div class="card empty-state" id="mpEmpty" hidden><h3 id="mpEmptyTitle">Motor not found</h3><p id="mpEmptyText">It may have been deleted or is not assigned to a device.</p><a class="btn btn-primary" id="mpEmptyLink" href="monitor.html">Back to Monitor</a></div>
 
       <section class="card motor-live-card" id="motorLive">
         <div class="card-head">
@@ -73,7 +73,7 @@
           <div id="animPill"></div>
         </div>
         <div class="scene" id="motorScene" role="img" aria-label="3D view of this motor on its device">
-          <div class="scene-legend"><span><i style="background:var(--series-1)"></i>DE probe</span><span><i style="background:var(--series-2)"></i>NDE probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
+          <div class="scene-legend"><span><i style="background:var(--series-1)"></i><span data-sensor="1">T1</span> probe</span><span><i style="background:var(--series-2)"></i><span data-sensor="2">T2</span> probe</span><span><i class="heat"></i>Housing: cool → alarm</span></div>
         </div>
       </section>
 
@@ -91,9 +91,9 @@
 
       <section class="card motor-detail" id="aggCard">
         <div class="card-head">
-          <div><h3>Aggregation</h3><div class="sub">Average per interval since the test started · DE, NDE and TA in one bar, one inside the other · hover for min and max</div></div>
+          <div><h3>Aggregation</h3><div class="sub">Average per interval since the test started · <span data-sensor="1">T1</span>, <span data-sensor="2">T2</span> and TA in one bar, one inside the other · hover for min and max</div></div>
           <div class="toolbar">
-            <div class="legend"><span><i style="background:var(--series-1)"></i>DE</span><span><i style="background:var(--series-2)"></i>NDE</span><span><i style="background:var(--series-amb)"></i>TA</span></div>
+            <div class="legend"><span><i style="background:var(--series-1)"></i><span data-sensor="1">T1</span></span><span><i style="background:var(--series-2)"></i><span data-sensor="2">T2</span></span><span><i style="background:var(--series-amb)"></i>TA</span></div>
             <div class="segmented" role="radiogroup" aria-label="Interval">
               <input type="radio" name="aggStep" id="ag-5" value="5"><label for="ag-5">5 min</label>
               <input type="radio" name="aggStep" id="ag-10" value="10" checked><label for="ag-10">10 min</label>
@@ -114,7 +114,7 @@
         <div class="card-head"><div><h3>Test history</h3><div class="sub" id="histSub"></div></div></div>
         <div class="table-wrap">
           <table class="table responsive hist-table">
-            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max DE °C</th><th class="num">Max NDE °C</th><th class="num">Max rise K</th><th>Result</th><th class="hist-dl">Results</th></tr></thead>
+            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max <span data-sensor="1">T1</span> °C</th><th class="num">Max <span data-sensor="2">T2</span> °C</th><th class="num">Max rise K</th><th>Result</th><th class="hist-dl">Actions</th></tr></thead>
             <tbody id="histRows"></tbody>
           </table>
         </div>
