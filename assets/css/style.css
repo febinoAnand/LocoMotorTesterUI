@@ -130,6 +130,8 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
+/* nothing shows until the sign-in is confirmed */
+body[data-page]:not([data-page="login"]):not(.authed) { visibility: hidden; }
 h1, h2, h3, h4 { margin: 0; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; }
 p { margin: 0; }
 a { color: var(--primary); text-decoration: none; }
@@ -478,14 +480,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .motor-panel.is-warn { border-color: color-mix(in srgb, var(--warn) 55%, var(--border)); }
 .motor-panel.is-crit { border-color: color-mix(in srgb, var(--crit) 55%, var(--border)); }
-.motor-panel-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-.motor-panel-head b { font-size: 14px; }
-.motor-panel-head .slot { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: block; }
 
 .t-warn { color: var(--warn-text); }
 .t-crit { color: var(--crit-text); }
@@ -679,6 +673,7 @@ dialog.modal.wide { width: min(760px, calc(100vw - 32px)); }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
 }
 .auth-preview .pv span { font-size: 11px; color: #9fb0c8; display: block; }
+.auth-preview .pv span span { display: inline; }
 .auth-preview .pv b { font-size: 22px; color: #fff; font-variant-numeric: tabular-nums; }
 .auth-preview .pv i { display: block; height: 4px; border-radius: 4px; margin-top: 8px; background: rgba(255, 255, 255, .1); overflow: hidden; }
 .auth-preview .pv i::after { content: ""; display: block; height: 100%; width: var(--w, 50%); background: var(--c, #2a78d6); border-radius: 4px; }
@@ -926,7 +921,6 @@ a.rb-row:hover { background: var(--surface-2); text-decoration: none; }
   .chart-tip, .viz-tip { display: none !important; }
 }
 
-@media (max-width: 420px) { .hide-xs { display: none; } }
 
 /* =========================================================
    Chart helpers: predictions, rings, bars
@@ -979,7 +973,6 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
 .motor-panel[data-pick-motor] { cursor: pointer; transition: box-shadow .15s, border-color .15s; }
 .motor-panel[data-pick-motor]:hover { border-color: var(--border-strong); }
 .motor-panel.is-selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft), 0 0 0 1px var(--primary); }
-#detailTitle { scroll-margin-top: 80px; }
 
 /* device + motor tables */
 .cell-dev { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -1133,7 +1126,6 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
 .role-meter { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); }
 .role-meter .bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; display: block; }
 .role-meter .bar i { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
-.perm-note { display: block; font-size: 11px; color: var(--muted); }
 .perm-check { display: inline-grid; cursor: pointer; }
 .perm-check input { position: absolute; opacity: 0; pointer-events: none; }
 .perm-check span { width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; color: transparent; background: var(--surface); transition: background .12s, border-color .12s; }
@@ -1183,7 +1175,6 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
 
 /* very wide screens: keep the content centred instead of hugging the left */
 .content { margin-left: auto; margin-right: auto; }
-.motor-panel-head b { white-space: nowrap; }
 
 /* management tables stack into cards on landscape phones and small tablets too */
 @media (max-width: 1100px) {
@@ -1388,7 +1379,6 @@ body.anim-in .agg-col { transform-box: fill-box; transform-origin: bottom; anima
 @keyframes aggGrow { from { transform: scaleY(0); } }
 
 /* Test ID */
-.test-tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; background: var(--primary-soft); color: var(--primary); font-family: var(--mono); font-size: 11px; font-weight: 700; vertical-align: 1px; }
 .test-id { color: var(--text); }
 .pick-test { margin-bottom: 14px; }
 .pick-test .field { max-width: 280px; }
@@ -1545,8 +1535,6 @@ body { background: radial-gradient(1200px 420px at 70% -120px, color-mix(in srgb
 /* =========================================================
    3D view (Monitor page): canvas scene with HTML labels on top
    ========================================================= */
-.scene-card .card-head { flex-wrap: wrap; }
-.scene-tabs { padding: 0; }
 .role-tab small { font-size: 11px; font-weight: 600; opacity: .75; }
 .scene {
   position: relative; height: 440px; overflow: hidden;
@@ -1621,6 +1609,8 @@ a.scene-tag:hover { border-color: var(--primary); }
 .mp-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mp-id .ch-tag { margin: 0; flex: none; font-size: 11px; padding: 2px 7px; }
 .mp-name { font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* narrow phones: the motor ID keeps its full width, the channel buttons go smaller */
+@media (max-width: 420px) { .mp-id { gap: 6px; } .mp-name { overflow: visible; } .mp-head { grid-template-columns: minmax(0, 1fr); } }
 .mp-head .verdict-pill { font-size: 11px; padding: 4px 10px; justify-self: end; }
 .mp-meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .mp-meta .mono { color: var(--primary); font-weight: 700; font-size: 11px; }
@@ -1667,6 +1657,7 @@ a.scene-tag:hover { border-color: var(--primary); }
 @media (min-width: 1101px) and (max-width: 1280px) { .motor-table th, .motor-table td, .user-table th, .user-table td { padding-left: 5px; padding-right: 5px; font-size: 12.5px; } }
 /* laptops: every Motors column fits, the row buttons show their icons (names on hover) */
 @media (max-width: 1720px) { .motor-table .row-actions .hide-sm { display: none; } }
+.auth-help { margin: 0; font-size: 12.5px; color: var(--muted); text-align: center; }
 /* Recent motor activity of one device (Monitor widget, device page) */
 .dev-activity { border-top: 1px solid var(--border); padding-top: 12px; }
 .dev-activity .dq-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 0 20px 8px; font-size: 13.5px; }
@@ -1833,13 +1824,6 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 @media print { .report-table th, .report-table td { position: static !important; box-shadow: none !important; } }
 @media print { .report-table .rep-act, .report-table .rep-act-h { display: none !important; } }
 /* Monitor page: a live 3D card per device; clicking it opens the device page */
-.mon-card { overflow: hidden; }
-.mon-card .scene canvas { cursor: pointer; }
-.mon-card.is-target { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
-.mon-head { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; }
-.mon-head .btn svg { width: 15px; height: 15px; }
-.mon-ch { font-size: 12px; }
-@media (max-width: 640px) { .mon-card .card-head { flex-wrap: wrap; } .mon-head { justify-content: flex-start; } }
 .dev-link { color: inherit; text-decoration: none; }
 .dev-link:hover { color: var(--primary); text-decoration: underline; }
 @media (max-width: 1200px) { .dv-info { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dv-info > div:nth-child(4) { border-left: 0; } .dv-info > div:nth-child(n + 4) { border-top: 1px solid var(--border); } }
