@@ -125,7 +125,7 @@
     { key: "monitoring", label: "Monitoring runs", does: { create: "Switch on a free channel", update: "Start / stop monitoring a motor" } },
     { key: "motors", label: "Motors", does: { view: "Motors page", create: "Register motors", update: "Edit details, add details, assign to a device", delete: "Delete motors" } },
     { key: "devices", label: "Devices", does: { view: "Devices page", create: "Add devices", update: "Edit devices", delete: "Delete devices, reset demo data" } },
-    { key: "limits", label: "Alarm & terminal limits", does: { view: "Settings page", update: "Change alarm and terminal limits" } },
+    { key: "limits", label: "Motor conditions & terminal limits", does: { view: "Settings page", update: "Change motor conditions, terminal limits and sensor names" } },
     { key: "reports", label: "Results", does: { view: "Results page", create: "Download and print results" } },
     { key: "activity", label: "Activity log", does: { view: "Activity log page" } },
     { key: "users", label: "Users", does: { view: "Users page", create: "Add users", update: "Edit users, enable / disable accounts", delete: "Delete users" } },
@@ -176,7 +176,13 @@
   // Administrator has everything; locked permissions are always granted
   const grantsOf = (role) => (role === ADMIN_ROLE ? PERMISSIONS.map((p) => p.key)
     : withViews(PERMISSIONS.filter((p) => p.locked === "all" || (GRANTS[role] || []).includes(p.key)).map((p) => p.key)));
-  const currentUser = () => USERS.find((u) => u.id === store.get(SESSION_KEY, null) && u.active) || null;
+  // a sign-in lasts until the browser is closed: it is never saved on the computer
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* storage unavailable */ } // sign-ins saved by earlier versions
+  const session = {
+    get() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } },
+    set(id) { try { if (id == null) sessionStorage.removeItem(SESSION_KEY); else sessionStorage.setItem(SESSION_KEY, JSON.stringify(id)); } catch (e) { /* storage unavailable */ } }
+  };
+  const currentUser = () => USERS.find((u) => u.id === session.get() && u.active) || null;
   const can = (perm) => { const u = currentUser(); return !!u && grantsOf(u.role).includes(perm); };
   const isAdmin = () => (currentUser() || {}).role === ADMIN_ROLE;
   // guard an action: returns true when allowed, otherwise tells the user why not
@@ -449,20 +455,20 @@
     const th = m.trend ? thermal(m) : null;
     const implausible = m.live.slice(0, AMB).some((v) => v < amb - 3 || v > 200); // probe colder than ambient → probe off / open circuit
     const checks = [
-      { k: "Rise above ambient", d: `Hotter of ${PAIR} − TA · Warn ${L.riseWarn} K · Alarm ${L.riseCrit} K`, v: rise.toFixed(1) + " K", n: rise, warn: L.riseWarn, crit: L.riseCrit },
-      { k: "Motor temperature", d: `Hotter of ${PAIR} · Warn ${L.warn} °C · Alarm ${L.crit} °C`, v: hot.toFixed(1) + " °C", n: hot, warn: L.warn, crit: L.crit },
-      { k: DIFF_NAME, d: `Warn ${L.devWarn} °C · Alarm ${L.devCrit} °C`, v: "Δ " + dev.toFixed(1) + " °C", n: dev, warn: L.devWarn, crit: L.devCrit }
+      { k: "Rise above ambient", d: `Hotter of ${PAIR} − TA · Monitor from ${L.riseWarn} K · Not OK from ${L.riseCrit} K`, v: rise.toFixed(1) + " K", n: rise, warn: L.riseWarn, crit: L.riseCrit },
+      { k: "Motor temperature", d: `Hotter of ${PAIR} · Monitor from ${L.warn} °C · Not OK from ${L.crit} °C`, v: hot.toFixed(1) + " °C", n: hot, warn: L.warn, crit: L.crit },
+      { k: DIFF_NAME, d: `Monitor from ${L.devWarn} °C · Not OK from ${L.devCrit} °C`, v: "Δ " + dev.toFixed(1) + " °C", n: dev, warn: L.devWarn, crit: L.devCrit }
     ];
     // heating model: warn early if the predicted final rise will pass the alarm limit
     if (th && th.final != null && th.confident) {
-      checks.push({ k: "Predicted final rise", d: `Heating model · τ ${th.tau.toFixed(0)} min · Warn if it will reach ${L.riseCrit} K`, v: th.final.toFixed(1) + " K", n: th.final, warn: L.riseCrit, crit: null });
+      checks.push({ k: "Predicted final rise", d: `Heating model · τ ${th.tau.toFixed(0)} min · Monitor if it will reach ${L.riseCrit} K`, v: th.final.toFixed(1) + " K", n: th.final, warn: L.riseCrit, crit: null });
     } else checks.push({ k: "Predicted final rise", d: "Heating model needs more readings", v: "Collecting data", s: "ok" });
     // same-condition comparison with the other motor on this device
     // only fair when both have heated for a similar time (a just-started motor is still cold)
     const p = comparablePartner(m);
     if (p) {
       const delta = rise - (hotOf(p.live) - p.live[AMB]);
-      checks.push({ k: `Compared with ${p.id}`, d: `Same device, same conditions · Warn ${L.partnerWarn} K · Alarm ${L.partnerCrit} K hotter`, v: (delta >= 0 ? "+" : "") + delta.toFixed(1) + " K", n: Math.max(0, delta), warn: L.partnerWarn, crit: L.partnerCrit });
+      checks.push({ k: `Compared with ${p.id}`, d: `Same device, same conditions · Monitor from ${L.partnerWarn} K · Not OK from ${L.partnerCrit} K hotter`, v: (delta >= 0 ? "+" : "") + delta.toFixed(1) + " K", n: Math.max(0, delta), warn: L.partnerWarn, crit: L.partnerCrit });
     }
     const out = termBreaches(m.live);
     checks.push(
@@ -561,7 +567,7 @@
 
   const STATUS = {
     ok: { label: "Within limits", icon: "checkCircle" },
-    warn: { label: "Warning", icon: "alert" },
+    warn: { label: "Monitor", icon: "alert" },
     crit: { label: "Over limit", icon: "xCircle" },
     off: { label: "Offline", icon: "wifiOff" },
     stop: { label: "Stopped", icon: "pause" }
@@ -1257,8 +1263,8 @@
   function runLines(m, mode) {
     const amb = m.live[AMB];
     return mode === "rise"
-      ? [{ v: LIMITS.riseWarn, label: `Warning ${LIMITS.riseWarn} K`, cls: "limit-warn" }, { v: LIMITS.riseCrit, label: `Alarm ${LIMITS.riseCrit} K`, cls: "limit" }]
-      : [{ v: amb + LIMITS.riseWarn, label: `Warning: ambient + ${LIMITS.riseWarn} K`, cls: "limit-warn" }, { v: amb + LIMITS.riseCrit, label: `Alarm: ambient + ${LIMITS.riseCrit} K`, cls: "limit" }];
+      ? [{ v: LIMITS.riseWarn, label: `Monitor ${LIMITS.riseWarn} K`, cls: "limit-warn" }, { v: LIMITS.riseCrit, label: `Not OK ${LIMITS.riseCrit} K`, cls: "limit" }]
+      : [{ v: amb + LIMITS.riseWarn, label: `Monitor: ambient + ${LIMITS.riseWarn} K`, cls: "limit-warn" }, { v: amb + LIMITS.riseCrit, label: `Not OK: ambient + ${LIMITS.riseCrit} K`, cls: "limit" }];
   }
 
 
@@ -1268,11 +1274,11 @@
     const ticks = Array.from({ length: Math.floor(max / 10) + 1 }, (_, i) => i * 10);
     const marks = `<i class="rb-mark warn" style="left:${pct(LIMITS.riseWarn, max)}"></i><i class="rb-mark fail" style="left:${pct(LIMITS.riseCrit, max)}"></i>`;
     return `<div class="rb">
-      <div class="rb-row rb-head"><span></span><span class="rb-track rb-labels"><span style="left:${pct(LIMITS.riseWarn, max)}">Warn ${LIMITS.riseWarn}</span><span class="fail" style="left:${pct(LIMITS.riseCrit, max)}">Alarm ${LIMITS.riseCrit} K</span></span><span></span></div>
+      <div class="rb-row rb-head"><span></span><span class="rb-track rb-labels"><span style="left:${pct(LIMITS.riseWarn, max)}">Monitor ${LIMITS.riseWarn}</span><span class="fail" style="left:${pct(LIMITS.riseCrit, max)}">Not OK ${LIMITS.riseCrit} K</span></span><span></span></div>
       ${rows.map(({ d, m, e }) => {
         const rs = MS.map((j) => m.live[j] - m.live[AMB]), conf = e.th && e.th.confident;
         const tip = MS.map((j) => `${PROBES[j]} rise: ${rs[j].toFixed(1)} K${conf ? ` → final ${e.th.sensors[j].final.toFixed(1)} K` : ""}`).join("|");
-        return `<a class="rb-row" href="motor.html?motor=${encodeURIComponent(m.id)}" data-tip="${esc(m.id)} · ${esc(d.name)}|${tip}|Alarm at ${LIMITS.riseCrit} K">
+        return `<a class="rb-row" href="motor.html?motor=${encodeURIComponent(m.id)}" data-tip="${esc(m.id)} · ${esc(d.name)}|${tip}|Not OK at ${LIMITS.riseCrit} K">
           <span class="rb-label"><b>${esc(m.id)}</b><span>${esc(d.name)}</span></span>
           <span class="rb-track">${marks}${rs.map((r, j) => {
             const fin = e.th && e.th.confident ? e.th.sensors[j].final : null;
@@ -1317,7 +1323,7 @@
     </svg>`;
   }
 
-  const limitLine = () => `Alarm at: ${LIMITS.riseCrit} K above ambient · ${LIMITS.crit} °C · ${PAIR} Δ ${LIMITS.devCrit} °C`;
+  const limitLine = () => `Not OK at: ${LIMITS.riseCrit} K above ambient · ${LIMITS.crit} °C · ${PAIR} Δ ${LIMITS.devCrit} °C`;
 
   function motorPanel(d, m, selected = false) {
     const e = evalMotor(m);
@@ -1336,7 +1342,7 @@
           <div class="ph-text">
             <span>${trendText(e)}</span>
             <b class="num">${e.th && e.th.confident ? `Final ≈ ${e.th.finalTemp.toFixed(1)} °C` : "Final: collecting data…"}</b>
-            <small class="num">${e.th && e.th.confident ? (e.th.alarmIn != null && e.rise < LIMITS.riseCrit ? `Alarm in about ${fmtMin(e.th.alarmIn)}` : e.th.eq ? "Equilibrium reached" : e.th.eqIn < 1 ? "Settling" : `Equilibrium in about ${fmtMin(e.th.eqIn)}`) : "&nbsp;"}</small>
+            <small class="num">${e.th && e.th.confident ? (e.th.alarmIn != null && e.rise < LIMITS.riseCrit ? `Not OK in about ${fmtMin(e.th.alarmIn)}` : e.th.eq ? "Equilibrium reached" : e.th.eqIn < 1 ? "Settling" : `Equilibrium in about ${fmtMin(e.th.eqIn)}`) : "&nbsp;"}</small>
           </div>
           <a href="motor.html?motor=${encodeURIComponent(m.id)}">Details →</a>
         </div>`}
@@ -2213,7 +2219,7 @@
         $("#cmpSub").textContent = `${m.id} and ${p.id} share ${d.name}, so they should heat alike · hottest probe rise above ambient`;
         lineChart($("#cmpChart"), {
           series: [{ name: m.id, short: m.id, color: "var(--primary)", points: hotRise(m) }, { name: p.id, short: p.id, color: "var(--muted)", points: hotRise(p) }],
-          lines: [{ v: LIMITS.riseCrit, label: `Alarm ${LIMITS.riseCrit} K`, cls: "limit" }],
+          lines: [{ v: LIMITS.riseCrit, label: `Not OK ${LIMITS.riseCrit} K`, cls: "limit" }],
           start: Math.min(m.runStart, p.runStart), unit: "K", height: 220, title: "Motor comparison",
           xfmt: (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         });
@@ -2788,10 +2794,10 @@
     const opsOf = (fd) => (fd.unit ? TEMP_OPS : fd.pick ? PICK_OPS : TEXT_OPS);
     const newRule = (k, extra = {}) => { const fd = fieldOf(k); return { k, op: fd.unit ? "ge" : fd.pick ? "is" : "has", val: fd.pick ? fd.pick[0] : "", val2: "", ...extra }; };
     const QUICK = () => [
-      { label: `Rise ≥ ${LIMITS.riseWarn} K`, tag: "warning", r: newRule("rise", { val: String(LIMITS.riseWarn) }) },
-      { label: `Rise ≥ ${LIMITS.riseCrit} K`, tag: "alarm", r: newRule("rise", { val: String(LIMITS.riseCrit) }) },
-      { label: `Hottest probe ≥ ${LIMITS.crit} °C`, tag: "alarm", r: newRule("hot", { val: String(LIMITS.crit) }) },
-      { label: `${PAIR} difference ≥ ${LIMITS.devWarn} °C`, tag: "warning", r: newRule("spread", { val: String(LIMITS.devWarn) }) },
+      { label: `Rise ≥ ${LIMITS.riseWarn} K`, tag: "monitor", r: newRule("rise", { val: String(LIMITS.riseWarn) }) },
+      { label: `Rise ≥ ${LIMITS.riseCrit} K`, tag: "not ok", r: newRule("rise", { val: String(LIMITS.riseCrit) }) },
+      { label: `Hottest probe ≥ ${LIMITS.crit} °C`, tag: "not ok", r: newRule("hot", { val: String(LIMITS.crit) }) },
+      { label: `${PAIR} difference ≥ ${LIMITS.devWarn} °C`, tag: "monitor", r: newRule("spread", { val: String(LIMITS.devWarn) }) },
       { label: "Not OK only", tag: "crit", r: newRule("cond", { val: "Not OK" }) },
       { label: "Terminal min / max exceeded", tag: "crit", r: newRule("ctype", { val: CTYPE_NAME.term }) },
       { label: "Equilibrium not reached", r: newRule("eq", { val: "Not yet" }) },
@@ -2829,7 +2835,7 @@
       const quick = QUICK().filter((q) => available(fieldOf(q.r.k)));
       $("#ruleChips").innerHTML = `<span class="rule-chips-label">${ico("bolt")}Quick rules</span>` + quick.map((q, i) => {
         const on = rules.some((r) => sameRule(r, q.r));
-        return `<button type="button" class="rule-chip${on ? " on" : ""}${q.tag ? ` tag-${q.tag === "crit" || q.tag === "alarm" ? "crit" : "warn"}` : ""}" data-quick="${i}" aria-pressed="${on}">${on ? ico("check") : ico("plus")}${esc(q.label)}${q.tag && q.tag !== "crit" ? `<small>${q.tag}</small>` : ""}</button>`;
+        return `<button type="button" class="rule-chip${on ? " on" : ""}${q.tag ? ` tag-${q.tag === "crit" || q.tag === "not ok" ? "crit" : "warn"}` : ""}" data-quick="${i}" aria-pressed="${on}">${on ? ico("check") : ico("plus")}${esc(q.label)}${q.tag && q.tag !== "crit" ? `<small>${q.tag}</small>` : ""}</button>`;
       }).join("");
       $("#ruleChips")._quick = quick;
     }
@@ -2965,7 +2971,7 @@
       if (shownTest && scrollTest) { scrollTest = false; requestAnimationFrame(() => $("#repMotorCard").scrollIntoView({ block: "start" })); }
       $("#repTitle").textContent = report.title;
       $("#repMeta").textContent = `${filterText().join(" · ")} · data as of ${new Date().toLocaleTimeString()}`;
-      $("#repPrintHead").innerHTML = `<h2>TractionTherm · ${esc(report.title)}</h2><p>Generated ${esc(stamp(Date.now()))} · ${esc(filterText().join(" · "))}</p><p>Limits: warning ${LIMITS.riseWarn} K / alarm ${LIMITS.riseCrit} K rise above ambient · alarm ${LIMITS.crit} °C · ${PAIR} Δ ${LIMITS.devCrit} °C · terminals ${PROBES.map((p) => `${p} ${TERM[p].min}–${TERM[p].max}`).join(", ")} °C · equilibrium &lt; ${EQ_RATE} K/h (IEC 60034-1)</p>`;
+      $("#repPrintHead").innerHTML = `<h2>TractionTherm · ${esc(report.title)}</h2><p>Generated ${esc(stamp(Date.now()))} · ${esc(filterText().join(" · "))}</p><p>Limits: Monitor from ${LIMITS.riseWarn} K / Not OK from ${LIMITS.riseCrit} K rise above ambient · Not OK at ${LIMITS.crit} °C · ${PAIR} Δ ${LIMITS.devCrit} °C · terminals ${PROBES.map((p) => `${p} ${TERM[p].min}–${TERM[p].max}`).join(", ")} °C · equilibrium &lt; ${EQ_RATE} K/h (IEC 60034-1)</p>`;
       // on screen each row also gets Download / Edit (not part of the download)
       $("#repHead").innerHTML = `<tr>${report.cols.map((h, i) => `<th${report.num.includes(i) ? ' class="num"' : ""}>${esc(h)}</th>`).join("")}<th class="num rep-act-h">Actions</th></tr>`;
       $("#repRows").innerHTML = report.rows.length ? report.rows.map((r) => {
@@ -3434,11 +3440,13 @@
       if (!u.active) { logActivity("auth", `Sign-in refused for ${u.username} — account is disabled`, u); return fail("This account is disabled. Ask an administrator to enable it."); }
       err.classList.remove("show");
       u.lastLogin = Date.now(); saveUsers();
-      store.set(SESSION_KEY, u.id);
+      session.set(u.id);
       logActivity("auth", "Signed in", u);
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true; btn.textContent = "Signing in…";
-      setTimeout(() => (location.href = "dashboard.html"), 600);
+      // back to the page that asked for the sign-in; only a page of this app, never another site
+      const next = new URLSearchParams(location.search).get("next") || "";
+      setTimeout(() => (location.href = /^(?!index\.html)[a-z]+\.html(\?[^#]*)?(#[\w-]*)?$/.test(next) ? next : "dashboard.html"), 600);
     });
     // animate preview tiles
     const tiles = $$(".auth-preview .pv b");
@@ -3457,14 +3465,18 @@
     initTips();
     initTheme();
     const page = document.body.dataset.page;
-    if (page !== "login" && !currentUser()) { location.replace("index.html"); return; }
+    const toLogin = () => { const here = location.pathname.split("/").pop() + location.search + location.hash; location.replace(`index.html${page === "dashboard" ? "" : `?next=${encodeURIComponent(here)}`}`); };
+    if (page !== "login" && !currentUser()) { toLogin(); return; }
+    // the browser's Back button can bring back a stored page after signing out
+    window.addEventListener("pageshow", (e) => { if (e.persisted && page !== "login" && !currentUser()) toLogin(); });
     // a page needs its area's View permission
     const PAGE_VIEW = { motors: "motors.view", devices: "devices.view", device: "devices.view", settings: "limits.view", reports: "reports.view", activity: "activity.view", users: "users.view", roles: "roles.view" };
     if (PAGE_VIEW[page] && !can(PAGE_VIEW[page])) { location.replace("dashboard.html"); return; }
-    if (page === "login") store.set(SESSION_KEY, null);
+    document.body.classList.add("authed"); // pages stay hidden until here
+    if (page === "login") session.set(null);
     initShell();
     applyPerms();
-    $$('.nav a[href="index.html"]').forEach((a) => a.addEventListener("click", () => { logActivity("auth", "Signed out"); store.set(SESSION_KEY, null); }));
+    $$('.nav a[href="index.html"]').forEach((a) => a.addEventListener("click", () => { logActivity("auth", "Signed out"); session.set(null); }));
     const pages = { dashboard: pageDashboard, monitor: pageMonitor, motor: pageMotor, reports: pageReports, devices: pageDevices, device: pageDevice, motors: pageMotorMgmt, settings: pageSettings, users: pageUsers, roles: pageRoles, activity: pageActivity, login: pageLogin };
     const render = pages[page] ? pages[page]() : null;
     if (render) rerender = render;
