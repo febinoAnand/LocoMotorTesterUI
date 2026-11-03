@@ -1835,3 +1835,12 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
   .dv-info > div:nth-child(-n + 2) { border-top: 0; }
   .dv-ch .mp-head, .dv-foot { padding-left: 14px; padding-right: 14px; }
 }
+
+/* ---------- My profile ---------- */
+.profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.profile-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.profile-hero b { display: block; font-size: 17px; margin-bottom: 4px; }
+.profile-pw { display: flex; flex-direction: column; gap: 16px; }
+.profile-pw .form-error { margin: 0; }
+.profile-pw .form-error:not(.show) { display: none; }
+@media (max-width: 900px) { .profile-grid { grid-template-columns: minmax(0, 1fr); } }
