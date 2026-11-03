@@ -11,6 +11,7 @@
     grid: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     cpu: '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/>',
     motor: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/><circle cx="12" cy="12" r="7"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
     thermo: '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/><path d="M11.5 10v7"/>',
     checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -3200,6 +3201,45 @@
   }
 
   /* =========================================================
+     Page: My profile — the signed-in user's own details, and a password change.
+     Name, username, email and role are changed by an administrator on the Users page.
+     ========================================================= */
+  function pageProfile() {
+    const me = currentUser(), form = $("#pwForm"), err = $("#pwError");
+    $("#pfHero").innerHTML = `<span class="avatar lg">${esc(initials(me.name))}</span><div><b>${esc(me.name)}</b><span>${roleBadge(me.role)}</span></div>`;
+    $("#pfDetails").innerHTML = [["Full name", esc(me.name)], ["Username", `<span class="mono">${esc(me.username)}</span>`], ["Email", esc(me.email)], ["Role", esc(me.role)],
+      ["Status", me.active ? "Active" : "Disabled"], ["Last sign-in", esc(fmtLogin(me.lastLogin))]].map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("");
+    if (can("users.update") && (me.role !== ADMIN_ROLE || isAdmin())) $("#pfDetailsSub").innerHTML = `Change your name, username or email on the <a href="users.html">Users</a> page`;
+    form.elements.username.value = me.username; // lets the browser's password manager match the account
+
+    $$("[data-pw-toggle]", form).forEach((b) => b.addEventListener("click", () => {
+      const input = b.parentElement.querySelector("input"), show = input.type === "password";
+      input.type = show ? "text" : "password";
+      b.innerHTML = ico(show ? "eyeOff" : "eye");
+      b.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    }));
+    form.addEventListener("input", () => err.classList.remove("show"));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      // Demo accounts are stored in the browser — replace with a call to your change-password API.
+      const f = form.elements, fail = (m, el) => { err.textContent = m; err.classList.add("show"); if (el) el.focus(); };
+      const u = currentUser();
+      if (!u) { location.replace("index.html"); return; }
+      if (!f.current.value) return fail("Enter your current password.", f.current);
+      if (f.current.value !== u.password) { logActivity("auth", "Password change failed — current password was incorrect"); return fail("Your current password is incorrect.", f.current); }
+      if (f.next.value.length < 6) return fail("New password must be at least 6 characters.", f.next);
+      if (f.next.value === f.current.value) return fail("New password must be different from the current one.", f.next);
+      if (f.next.value !== f.again.value) return fail("The new passwords don't match.", f.again);
+      u.password = f.next.value; saveUsers();
+      logActivity("auth", "Changed own password");
+      form.reset(); f.username.value = u.username;
+      $$("[data-pw-toggle]", form).forEach((b) => { b.parentElement.querySelector("input").type = "password"; b.innerHTML = ico("eye"); b.setAttribute("aria-label", "Show password"); });
+      toast("Password changed");
+    });
+    return null;
+  }
+
+  /* =========================================================
      Page: Roles & Permissions — roles, and a View / Create / Update / Delete grid per role.
      Administrator is a system role: always full access, can't be renamed, deleted or changed.
      ========================================================= */
@@ -3477,7 +3517,7 @@
     initShell();
     applyPerms();
     $$('.nav a[href="index.html"]').forEach((a) => a.addEventListener("click", () => { logActivity("auth", "Signed out"); session.set(null); }));
-    const pages = { dashboard: pageDashboard, monitor: pageMonitor, motor: pageMotor, reports: pageReports, devices: pageDevices, device: pageDevice, motors: pageMotorMgmt, settings: pageSettings, users: pageUsers, roles: pageRoles, activity: pageActivity, login: pageLogin };
+    const pages = { dashboard: pageDashboard, monitor: pageMonitor, motor: pageMotor, reports: pageReports, devices: pageDevices, device: pageDevice, motors: pageMotorMgmt, settings: pageSettings, users: pageUsers, roles: pageRoles, activity: pageActivity, profile: pageProfile, login: pageLogin };
     const render = pages[page] ? pages[page]() : null;
     if (render) rerender = render;
     animateValues();

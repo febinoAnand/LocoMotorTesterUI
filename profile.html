@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My profile · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="profile">
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="brand-sub">Motor Monitoring</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitoring</div>
+      <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
+      <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
+      <a href="reports.html"><i data-icon="report"></i>Results</a>
+      <div class="nav-label">Configuration</div>
+      <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
+      <a href="motors.html"><i data-icon="motor"></i>Motors</a>
+      <div class="nav-label nav-admin">Administration</div>
+      <a class="nav-admin" href="users.html"><i data-icon="users"></i>Users</a>
+      <a class="nav-admin" href="roles.html"><i data-icon="key"></i>Roles &amp; Permissions</a>
+      <a class="nav-act" href="activity.html"><i data-icon="clock"></i>Activity log</a>
+      <div class="nav-label nav-sys">System</div>
+      <a href="settings.html"><i data-icon="sliders"></i>Settings</a>
+      <div class="nav-label">Account</div>
+      <a href="profile.html" aria-current="page"><i data-icon="user"></i>My profile</a>
+      <a href="index.html"><i data-icon="logout"></i>Sign out</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
+      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+    </div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" data-nav-toggle aria-label="Open menu"><i data-icon="menu"></i></button>
+      <div class="topbar-title"><div class="crumbs">Account</div><h1>My profile</h1></div>
+      <div class="topbar-actions">
+        <span class="clock num" data-clock></span>
+        <span class="live-tag hide-sm"><span class="pulse"></span>Live</span>
+        <a class="icon-btn" href="dashboard.html" aria-label="Alerts"><i data-icon="bell"></i><span class="dot" data-alert-dot hidden></span></a>
+        <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+        <a class="user-chip" href="profile.html" aria-label="My profile"><span class="avatar">AP</span><span class="who"><b>Arun Prakash</b><span>Administrator</span></span></a>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h2>My profile</h2>
+          <p>Your account details, and a place to change your password.</p>
+        </div>
+      </div>
+
+      <div class="profile-grid">
+        <section class="card">
+          <div class="card-head">
+            <div><h3>Account details</h3><div class="sub" id="pfDetailsSub">Ask an administrator to change your name, username, email or role</div></div>
+          </div>
+          <div class="card-body">
+            <div class="profile-hero" id="pfHero"></div>
+            <dl class="detail-list" id="pfDetails"></dl>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div><h3>Change password</h3><div class="sub">You stay signed in after changing it</div></div>
+          </div>
+          <form class="card-body profile-pw" id="pwForm" novalidate>
+            <div class="form-error" id="pwError" role="alert"></div>
+            <input type="text" name="username" autocomplete="username" hidden>
+            <div class="field"><label for="pw-cur">Current password</label>
+              <div class="input-icon"><i data-icon="lock"></i><input class="input" id="pw-cur" name="current" type="password" autocomplete="current-password" required>
+                <button type="button" class="trail" data-pw-toggle aria-label="Show password"><i data-icon="eye"></i></button></div></div>
+            <div class="field"><label for="pw-new">New password</label>
+              <div class="input-icon"><i data-icon="key"></i><input class="input" id="pw-new" name="next" type="password" autocomplete="new-password" required>
+                <button type="button" class="trail" data-pw-toggle aria-label="Show password"><i data-icon="eye"></i></button></div>
+              <span class="hint">At least 6 characters, different from the current one.</span></div>
+            <div class="field"><label for="pw-again">Confirm new password</label>
+              <div class="input-icon"><i data-icon="key"></i><input class="input" id="pw-again" name="again" type="password" autocomplete="new-password" required>
+                <button type="button" class="trail" data-pw-toggle aria-label="Show password"><i data-icon="eye"></i></button></div></div>
+            <div><button type="submit" class="btn btn-primary">Change password</button></div>
+          </form>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
