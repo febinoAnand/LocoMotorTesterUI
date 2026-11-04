@@ -33,7 +33,7 @@
     </nav>
     <div class="sidebar-foot">
       <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
     </div>
   </aside>
   <div class="scrim"></div>
@@ -67,7 +67,7 @@
 
       <section class="card rep-mcard" id="repMotorCard" aria-label="Motor" hidden></section>
 
-      <section class="card" id="repTestCard" aria-label="Test" hidden><div class="test-graphs" id="repTest"></div></section>
+      <section class="card" id="repTestCard" aria-label="Test" hidden><div class="test-graphs" id="repTest"></div><div class="test-details" id="repTestDetails" hidden></div></section>
 
       <section class="card">
         <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
@@ -98,7 +98,7 @@
           <div class="field"><label for="r-motor">Motor</label><select class="select" id="r-motor" name="motor"></select></div>
           <div class="field"><label for="r-cond">Condition</label>
             <select class="select" id="r-cond" name="cond">
-              <option value="all">All conditions</option><option value="ok">Good</option><option value="warn">Monitor</option><option value="crit">Not OK</option><option value="stop">Stopped</option>
+              <option value="all">All conditions</option><option value="ok">Stable</option><option value="warn">Processing</option><option value="crit">Unstable</option><option value="stop">Stopped</option>
             </select></div>
           <div class="field"><label for="r-ctype">Condition type</label>
             <select class="select" id="r-ctype" name="ctype">
@@ -117,13 +117,13 @@
             </select></div>
           <div class="field rep-readings"><label for="r-int">Reading every</label>
             <select class="select" id="r-int" name="interval">
-              <option value="1">1 minute</option><option value="5" selected>5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option>
+              <option value="1">1 minute</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option>
             </select></div>
           <div class="field span-all rules">
             <div class="rules-head">
               <div>
                 <div class="label">Custom rules</div>
-                <span class="hint">Narrow the results by temperature, condition or motor details · temperatures in °C, rise in K</span>
+                <span class="hint">Narrow the results by temperature, condition or motor details · all values in °C</span>
               </div>
               <div class="segmented" id="ruleModeBox" role="radiogroup" aria-label="Rows must match" hidden>
                 <input type="radio" name="ruleMode" id="rm-all" value="all" checked><label for="rm-all">Match all rules</label>

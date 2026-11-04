@@ -33,7 +33,7 @@
     </nav>
     <div class="sidebar-foot">
       <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
     </div>
   </aside>
   <div class="scrim"></div>
@@ -55,13 +55,13 @@
       <div class="page-head">
         <div>
           <h2>Settings</h2>
-          <p>Set what counts as Good, Monitor and Not OK, and the minimum and maximum for each terminal.</p>
+          <p>Limits and conditions for AC and DC motors alike, the stability rule, the time intervals and the vibration question.</p>
         </div>
       </div>
 
       <section class="card" id="conditions">
         <div class="card-head">
-          <div><h3>Motor conditions</h3><div class="sub">Set what counts as Good, Monitor and Not OK · applies to every motor as soon as you save</div></div>
+          <div><h3>Motor conditions</h3><div class="sub">Set what counts as Stable, Processing and Unstable · applies to every motor as soon as you save</div></div>
           <div class="toolbar">
             <span class="badge warn" id="condDirty" hidden>Unsaved changes</span>
             <button class="btn btn-sm btn-ghost" id="condReset" type="button"><i data-icon="refresh"></i>Reset defaults</button>
@@ -75,12 +75,13 @@
             <tbody id="condRows"></tbody>
           </table>
         </div>
-        <p class="form-note cond-note"><i data-icon="alert"></i><span>A motor takes its worst check: it is Good only when every check is Good, and Not OK as soon as any one check reaches Not OK. So a motor can be Not OK below the temperature limit if its rise above ambient is too high. A motor also shows Monitor when its predicted final rise will reach the Not OK limit, and Not OK when a terminal goes outside the limits below.</span></p>
+        <div class="settle-rule" id="settleRule"></div>
+        <p class="form-note cond-note"><i data-icon="alert"></i><span>A motor takes its worst check. It is <b>Unstable</b> as soon as any check reaches its Unstable limit, or a terminal goes outside the limits below. It is <b>Stable</b> only when its temperatures have settled and every check is below its Processing limit. Otherwise it is <b>Processing</b>: still heating, or between the two limits. A motor also shows Processing when its predicted final rise will reach the Unstable limit.</span></p>
       </section>
 
       <section class="card">
         <div class="card-head">
-          <div><h3>Terminal limits</h3><div class="sub">Rename the motor sensors and say what each one measures · TA ambient air · values in °C</div></div>
+          <div><h3>Terminal limits</h3><div class="sub">Minimum and maximum for each sensor · T1 = DE / PE, T2 = NDE / CE · TA ambient air · values in °C</div></div>
           <div class="toolbar">
             <span class="badge warn" id="termDirty" hidden>Unsaved changes</span>
             <button class="btn btn-sm btn-ghost" id="termReset" type="button"><i data-icon="refresh"></i>Reset defaults</button>
@@ -96,6 +97,52 @@
           </table>
         </div>
         <div class="card-foot muted" id="termFoot" style="font-size:12px"></div>
+      </section>
+
+
+      <section class="card" id="intervals">
+        <div class="card-head">
+          <div><h3>Recording interval</h3><div class="sub">How often a reading is recorded in the results and downloads · counted from the start of each test</div></div>
+          <div class="toolbar">
+            <span class="badge warn" id="recDirty" hidden>Unsaved changes</span>
+            <button class="btn btn-sm btn-ghost" id="recReset" type="button"><i data-icon="refresh"></i>Reset default</button>
+            <button class="btn btn-sm btn-primary" id="recSave" type="button" disabled>Save interval</button>
+          </div>
+        </div>
+        <div class="card-body rec-body">
+          <div class="form-error" id="recError" role="alert"></div>
+          <div class="rec-row">
+            <div class="segmented" id="recPresets" role="radiogroup" aria-label="Recording interval"><input type="radio" name="recEvery" id="rec-1" value="1"><label for="rec-1">1 min</label><input type="radio" name="recEvery" id="rec-5" value="5"><label for="rec-5">5 min</label><input type="radio" name="recEvery" id="rec-10" value="10"><label for="rec-10">10 min</label><input type="radio" name="recEvery" id="rec-15" value="15"><label for="rec-15">15 min</label><input type="radio" name="recEvery" id="rec-30" value="30"><label for="rec-30">30 min</label><input type="radio" name="recEvery" id="rec-custom" value="custom"><label for="rec-custom">Custom</label></div>
+            <div class="input-unit rec-custom" id="recCustomBox" hidden><input class="input num" id="recCustom" type="number" step="1" min="1" max="240" aria-label="Custom recording interval in minutes"><span>min</span></div>
+          </div>
+          <p class="muted rec-note" id="recNote"></p>
+        </div>
+      </section>
+
+      <section class="card" id="live">
+        <div class="card-head">
+          <div><h3>Live update interval</h3><div class="sub">How often each device sends its readings · live values, the real-time graph and alarms update at this rate</div></div>
+          <div class="toolbar">
+            <span class="badge warn" id="liveDirty" hidden>Unsaved changes</span>
+            <button class="btn btn-sm btn-ghost" id="liveReset" type="button"><i data-icon="refresh"></i>Reset default</button>
+            <button class="btn btn-sm btn-primary" id="liveSave" type="button" disabled>Save interval</button>
+          </div>
+        </div>
+        <div class="card-body rec-body">
+          <div class="form-error" id="liveError" role="alert"></div>
+          <div class="rec-row">
+            <div class="segmented" id="livePresets" role="radiogroup" aria-label="Live update interval"><input type="radio" name="liveEvery" id="live-1" value="1"><label for="live-1">1 s</label><input type="radio" name="liveEvery" id="live-2" value="2"><label for="live-2">2 s</label><input type="radio" name="liveEvery" id="live-5" value="5"><label for="live-5">5 s</label><input type="radio" name="liveEvery" id="live-10" value="10"><label for="live-10">10 s</label><input type="radio" name="liveEvery" id="live-30" value="30"><label for="live-30">30 s</label><input type="radio" name="liveEvery" id="live-custom" value="custom"><label for="live-custom">Custom</label></div>
+            <div class="input-unit rec-custom" id="liveCustomBox" hidden><input class="input num" id="liveCustom" type="number" step="1" min="1" max="60" aria-label="Custom live update interval in seconds"><span>s</span></div>
+          </div>
+          <p class="muted rec-note" id="liveNote"></p>
+        </div>
+      </section>
+
+      <section class="card" id="vibration">
+        <div class="card-head"><div><h3>Vibration readings</h3><div class="sub">SKF readings on each side of the motor · velocity (mm/s) and acceleration envelope (gE) · saved with the test and shown in its report</div></div></div>
+        <div class="card-body rec-body">
+          <label class="check switch-row vib-ask"><input type="checkbox" id="vibAsk"> Ask for vibration readings whenever a motor is stopped</label>
+        </div>
       </section>
     </main>
   </div>

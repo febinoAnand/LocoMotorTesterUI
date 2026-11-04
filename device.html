@@ -33,7 +33,7 @@
     </nav>
     <div class="sidebar-foot">
       <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
     </div>
   </aside>
   <div class="scrim"></div>
@@ -76,11 +76,6 @@
         <section class="card dv-info" id="dvInfo" aria-label="Device details"></section>
         <div class="dv-split-head">
           <div><h3>Motors on this device</h3><span class="muted">Left: CH 1 · right: CH 2 · the same details as each motor's own page</span></div>
-          <div class="segmented" role="radiogroup" aria-label="Aggregation interval">
-            <input type="radio" name="dvAggStep" id="dv-ag-5" value="5"><label for="dv-ag-5">5 min</label>
-            <input type="radio" name="dvAggStep" id="dv-ag-10" value="10" checked><label for="dv-ag-10">10 min</label>
-            <input type="radio" name="dvAggStep" id="dv-ag-15" value="15"><label for="dv-ag-15">15 min</label>
-          </div>
         </div>
         <div class="dv-split" id="dvSplit" aria-live="polite"></div>
         <section class="card" id="dvStoppedCard" hidden><div id="dvStopped"></div></section>
