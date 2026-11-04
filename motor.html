@@ -33,7 +33,7 @@
     </nav>
     <div class="sidebar-foot">
       <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every 2 s · UI v1.0</div>
+      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
     </div>
   </aside>
   <div class="scrim"></div>
@@ -90,22 +90,6 @@
       </section>
 
 
-      <section class="card motor-detail" id="aggCard">
-        <div class="card-head">
-          <div><h3>Aggregation</h3><div class="sub">Average per interval since the test started · <span data-sensor="1">T1</span>, <span data-sensor="2">T2</span> and TA in one bar, one inside the other · hover for min and max</div></div>
-          <div class="toolbar">
-            <div class="legend"><span><i style="background:var(--series-1)"></i><span data-sensor="1">T1</span></span><span><i style="background:var(--series-2)"></i><span data-sensor="2">T2</span></span><span><i style="background:var(--series-amb)"></i>TA</span></div>
-            <div class="segmented" role="radiogroup" aria-label="Interval">
-              <input type="radio" name="aggStep" id="ag-5" value="5"><label for="ag-5">5 min</label>
-              <input type="radio" name="aggStep" id="ag-10" value="10" checked><label for="ag-10">10 min</label>
-              <input type="radio" name="aggStep" id="ag-15" value="15"><label for="ag-15">15 min</label>
-            </div>
-          </div>
-        </div>
-        <div class="card-body"><div class="agg-chart" id="aggChart"></div></div>
-        <div class="agg-stats" id="aggStats"></div>
-      </section>
-
       <section class="card motor-detail" id="cmpCard">
         <div class="card-head"><div><h3>Compared with the other motor</h3><div class="sub" id="cmpSub"></div></div></div>
         <div class="card-body"><div class="chart" id="cmpChart"></div></div>
@@ -115,7 +99,7 @@
         <div class="card-head"><div><h3>Test history</h3><div class="sub" id="histSub"></div></div></div>
         <div class="table-wrap">
           <table class="table responsive hist-table">
-            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max <span data-sensor="1">T1</span> °C</th><th class="num">Max <span data-sensor="2">T2</span> °C</th><th class="num">Max rise K</th><th>Result</th><th class="hist-dl">Actions</th></tr></thead>
+            <thead><tr><th>Test ID</th><th>Device</th><th>Started</th><th class="num">Duration</th><th class="num">Max <span data-sensor="1">T1</span> °C</th><th class="num">Max <span data-sensor="2">T2</span> °C</th><th class="num">Max rise °C</th><th>Result</th><th class="hist-dl">Actions</th></tr></thead>
             <tbody id="histRows"></tbody>
           </table>
         </div>
