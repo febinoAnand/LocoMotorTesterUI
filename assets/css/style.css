@@ -503,6 +503,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .panel-note svg { width: 14px; height: 14px; flex: none; }
 .panel-note .btn { margin-left: auto; }
+/* a running test past its maximum test hours */
+.over-note.crit { background: var(--crit-bg); color: var(--crit-text); }
+.motor-hero-card > .over-note { border-radius: 0; margin: 0 0 4px; }
 
 .offline-mask { padding: 32px 20px; text-align: center; color: var(--muted); }
 .offline-mask svg { width: 28px; height: 28px; margin: 0 auto 8px; }
@@ -523,6 +526,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .r-value { font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin-top: 6px; font-family: var(--mono); }
 .r-value small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 3px; font-family: var(--font); }
 .r-sub { font-size: 12px; font-weight: 600; color: var(--text-2); }
+
 .readings.lg { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .readings.lg .reading { padding: 22px 24px 18px; }
 .readings.lg .r-value { font-size: 48px; }
@@ -1082,8 +1086,8 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
 .no-perm-motors-create [data-add-motor=""], .no-perm-motors-update [data-add-motor]:not([data-add-motor=""]), .no-perm-motors-update [data-edit-motor], .no-perm-motors-update [data-edit-test],
 .no-perm-motors-update [data-assign-motor], .no-perm-motors-delete [data-del-motor],
 .no-perm-devices-create #addDevice, .no-perm-devices-update [data-edit], .no-perm-devices-delete [data-del], .no-perm-devices-delete #resetDemo,
-.no-perm-limits-update [data-edit-limits], .no-perm-limits-update #termSave, .no-perm-limits-update #termReset, .no-perm-limits-update #condSave, .no-perm-limits-update #condReset, .no-perm-limits-update #recSave, .no-perm-limits-update #recReset, .no-perm-limits-update #liveSave, .no-perm-limits-update #liveReset,
-.no-perm-reports-create #repCsv, .no-perm-reports-create #repPrint, .no-perm-reports-create #mpDownload, .no-perm-reports-create [data-dl-test], .no-perm-reports-create [data-dl-motor-tests], .no-perm-reports-create [data-dl-all-motors],
+.no-perm-limits-update [data-edit-limits], .no-perm-limits-update #setSave, .no-perm-limits-update #setReset,
+.no-perm-reports-create #repCsv, .no-perm-reports-create #repCsvHist, .no-perm-reports-create #repPrint, .no-perm-reports-create #mpDownload, .no-perm-reports-create [data-dl-test], .no-perm-reports-create [data-dl-all-motors],
 .no-perm-monitoring-create .slot-on,
 .no-perm-users-create #addUser, .no-perm-roles-create #addRole, .no-perm-roles-update [data-redit], .no-perm-roles-delete [data-rdel],
 .no-perm-roles-update #permSave, .no-perm-roles-update #permReset,
@@ -1776,23 +1780,10 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 .term-table .input-unit span { right: 9px; }
 .term-table td:has(> .input-unit), .term-table th.num { white-space: nowrap; }
 /* Results: one motor chosen → its tests in order, each with its own download */
-.rep-mcard .card-head { flex-wrap: wrap; gap: 10px; }
-.rep-mcard .card-head > div:first-child { flex: 1 1 240px; min-width: 0; }
-.rep-mcard .card-head .sub, .rep-mcard .card-head h3 { white-space: normal; overflow-wrap: anywhere; }
-.rep-mcard .actions { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
-.rep-mcard .actions .btn { flex: 1 1 auto; min-width: 0; white-space: normal; }
-.rep-tests { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
-.rep-tests li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 18px; border-top: 1px solid var(--border); min-width: 0; }
-.rep-tests li > span { flex: 1 1 120px; min-width: 0; font-size: 12.5px; }
-.rep-tests-empty { padding: 12px 18px; margin: 0; }
-.rep-tests .hide-sm { display: none; }
-.rep-tests li { flex-wrap: nowrap; }
-.rep-tests li.is-open { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); box-shadow: inset 3px 0 0 var(--primary); }
-@media print { .rep-mcard .actions, .rep-tests .btn { display: none !important; } }
 /* Results: Download / Edit per row on screen only (not printed, not in the CSV) */
 .report-table .rep-act, .report-table .rep-act-h { white-space: nowrap; }
 /* the table is wide: the Test ID and the row's buttons stay in view while it scrolls sideways */
-@media (min-width: 641px) {
+@media (min-width: 1280px) {
   .report-table th:first-child, .report-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--border); }
   .report-table thead th:first-child, .report-table thead .rep-act-h { background: var(--surface-2); }
   .report-table .rep-act, .report-table .rep-act-h { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -1px 0 0 var(--border); }
@@ -1875,6 +1866,7 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 .sheet-tbl th, .sheet-tbl td, .sheet-sum th, .sheet-sum td { padding: 8px 14px; white-space: nowrap; }
 .sheet-tbl td.num, .sheet-tbl th.num, .sheet-sum td.num, .sheet-sum th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .sheet .t-ok { color: var(--ok-text); font-weight: 600; }
+.sheet .t-amb { color: var(--text-2); }
 .sheet-sum .verdict-pill { font-size: 11px; padding: 3px 8px; }
 .sheet-side .chart-tbl-note { padding: 8px 2px 0; max-width: 420px; }
 .sheet-graph { min-width: 0; }
@@ -1919,6 +1911,7 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 .ta-center .r-value { font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
 .ta-center .r-value small { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 2px; }
 .ta-center .ta-sub { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.ta-center .ta-sub .ta-sep { display: none; }
 .dv-ta { align-self: start; position: sticky; top: 96px; margin-top: 168px; } /* level with the channels' DE / NDE readings */
 .readings.no-ta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 900px) {
@@ -1926,6 +1919,7 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
   .dv-ta { position: static; margin-top: 0; }
   .ta-center { grid-auto-flow: column; justify-content: center; align-items: center; gap: 12px; padding: 10px 14px; }
   .ta-center .ta-sub br { display: none; }
+  .ta-center .ta-sub .ta-sep { display: inline; }
 }
 
 /* pagination under every list table */
@@ -1941,6 +1935,27 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 .report-table tr.rep-row { cursor: pointer; }
 .report-table tr.rep-row:hover td { background: var(--surface-2); }
 .test-details { padding: 0 20px 20px; }
+/* the opened test on Results: its head (ID, Download, Close) on top, then Full details, then the test sheet */
+.tg-top { padding: 16px 20px 12px; }
+#repTestCard { scroll-margin-top: 84px; }
+/* the whole test as one graph, on screen only (the downloaded report keeps its own sheet) */
+.test-live { border-top: 1px solid var(--border); padding: 16px 20px 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.test-live[hidden] { display: none; }
+.tl-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px 16px; }
+.tl-head h4 { margin: 0; font-size: 14px; }
+.tl-head .sub { font-size: 12px; margin-top: 2px; }
+.tl-head > div:first-child { flex: 1 1 260px; min-width: 0; }
+.tl-head .sub { overflow-wrap: anywhere; }
+.rt-pick { max-width: 100%; }
+.rt-stats.rt-stats-flush { padding: 0; }
+.tg-top:empty { display: none; }
+/* Edit test: the test itself (ID, device, channel) shown, not editable */
+.te-fixed { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.te-fixed > div { padding: 8px 12px; border-right: 1px solid var(--border); min-width: 0; }
+.te-fixed > div:last-child { border-right: 0; }
+.te-fixed dt { font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.te-fixed dd { margin: 0; font-weight: 600; font-size: 13.5px; word-break: break-word; }
+.log-when { white-space: nowrap; }
 .test-details h4 { margin: 4px 0 10px; font-size: 14px; }
 .td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0; margin: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .td-grid > div { padding: 8px 12px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: 0 -1px -1px 0; }
@@ -1954,3 +1969,118 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
   .rec-row .segmented label { text-align: center; }
   .rec-row .rec-custom { width: 100%; }
 }
+
+/* Settings: the test settings side by side, one box each (wrap on narrow screens) */
+.set-tiles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; padding: 16px 20px; }
+@media (max-width: 1280px) { .set-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .set-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .set-tiles { grid-template-columns: minmax(0, 1fr); } }
+.set-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.set-tile > label:first-child, .set-tile .set-label { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; min-height: 2.8em; }
+@media (max-width: 640px) { .set-tile > label:first-child, .set-tile .set-label { min-height: 0; } }
+.set-tile .input-unit .input { background: var(--surface); }
+.set-tile .hint { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.set-tile .vib-ask { font-size: 13px; }
+.set-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 16px; padding: 0 20px 16px; }
+.set-rules > div { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.set-rules > div > span { flex: none; }
+.set-rules p { margin: 0; font-size: 13px; color: var(--text-2); }
+.set-live { display: block; text-align: left; font-size: 12px; overflow-wrap: anywhere; }
+#setLocked { margin: 0 20px; }
+
+
+/* Results · Real-time: range and interval pickers next to the legend */
+.rt-pick { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
+.rt-pick .legend { margin-left: 4px; }
+.rt-pick-sel { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.rt-pick-sel .select-sm { width: auto; height: 30px; padding-top: 0; padding-bottom: 0; font-size: 12.5px; }
+.dv-sec-h .rt-pick-sel { margin-left: auto; }
+
+/* phones: the opened test's head wraps (ID on its own line, buttons below), Full details two to a row */
+.tg-head { flex-wrap: wrap; }
+.tg-head > div:first-child { flex: none; white-space: nowrap; }
+@media (max-width: 560px) {
+  .tg-acts { width: 100%; }
+  .td-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .td-grid dd { font-size: 13px; }
+}
+
+/* a motor sensor's box, cut by a diagonal from bottom-left to top-right:
+   temperature (label, value, rise) in the top-left half, rate of change in the bottom-right half */
+.readings .reading.split {
+  display: grid !important; grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto minmax(14px, 1fr) auto !important; grid-template-areas: none !important;
+  align-items: start !important; min-height: 150px; padding: 12px 14px !important; gap: 0 !important;
+  background: linear-gradient(to bottom right, transparent calc(50% - .7px), var(--border) calc(50% - .5px), var(--border) calc(50% + .5px), var(--surface-2) calc(50% + .7px));
+}
+.reading.split .r-top { grid-row: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.reading.split .r-top .r-label, .reading.split .r-top .r-value, .reading.split .r-top .r-sub { grid-area: auto !important; text-align: left !important; margin: 0; }
+.reading.split .r-top .r-value { margin-top: 2px !important; }
+.reading.split .r-bot { grid-row: 3; justify-self: end; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; }
+.r-cap { font-size: 10.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); line-height: 1.25; }
+.r-rate { font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; color: var(--text-2); white-space: nowrap; }
+.r-rate small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 2px; font-family: var(--font); }
+.r-rate.ok { color: var(--ok-text); }
+.r-rate.wait { color: var(--muted); }
+.r-next { font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.motor-panel .reading.split .r-value, .dv-ch .reading.split .r-value { font-size: 26px !important; }
+.readings.lg .reading.split { min-height: 170px; }
+.readings.lg .reading.split .r-rate { font-size: 30px; }
+@media (max-width: 640px) {
+  .readings .reading.split { min-height: 132px; padding: 10px 10px !important; }
+  .motor-panel .reading.split .r-value, .dv-ch .reading.split .r-value, .r-rate { font-size: 21px !important; }
+  .r-cap { font-size: 9.5px; }
+}
+
+/* motor page: one terminal per row on phones, so the large value / change fits */
+@media (max-width: 560px) {
+  .readings.lg { grid-template-columns: minmax(0, 1fr) !important; }
+  .readings.lg .reading + .reading { border-left: 0 !important; border-top: 1px solid var(--border); }
+}
+/* motor widgets show TA once between the channels, so a widget's readings are only its two terminals: two columns, not three */
+.motor-panel .readings.panel.no-ta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.motor-panel { container: mp / inline-size; }
+/* a narrow widget: the two terminal boxes one above the other, so each diagonal box keeps its shape */
+@container mp (max-width: 420px) {
+  .motor-panel .readings.panel.no-ta { grid-template-columns: minmax(0, 1fr); }
+  .motor-panel .readings.panel.no-ta .reading + .reading { border-left: 0; border-top: 1px solid var(--border); }
+  .motor-panel .readings .reading.split { min-height: 124px; }
+}
+/* Results lists completed tests only: three summary tiles (tests, Stable, Unstable) */
+#repSummary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#repSummary > div:nth-child(2) { border-right: 1px solid var(--border); }
+#repSummary > div:nth-child(3) { border-right: 0; }
+#repRunning .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+/* a stopped motor: its final result with a small grey "Stopped" tag */
+.state-pill { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; vertical-align: middle; }
+.stop-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); background: var(--surface-3); white-space: nowrap; }
+.stop-chip svg { width: 11px; height: 11px; }
+a.state-pill { text-decoration: none; border-radius: 999px; }
+a.state-pill:hover .stop-chip, a.state-pill:focus-visible .stop-chip { color: var(--primary); background: var(--soft, var(--surface-3)); }
+
+/* IDs never break across lines in tables (TM-3810, TEST-0001) */
+.table .lead-cell a.mono, .table td .mono { white-space: nowrap; }
+/* Results table: the long model text wraps so the key columns fit beside it */
+.report-table td[data-label="Model / type"] { white-space: normal; min-width: 150px; max-width: 230px; }
+/* Results table on screen: slimmer cells; the model text only on wide screens (it is in Full details and the CSV) */
+@media (min-width: 1280px) {
+  .report-table td, .report-table th { padding-left: 12px; padding-right: 12px; }
+  .report-table td.lead-cell, .report-table th:first-child { padding-left: 20px; }
+  .report-table .rep-act, .report-table .rep-act-h { padding-left: 8px; padding-right: 16px; }
+}
+@media (min-width: 1280px) and (max-width: 1599px) { .report-table .col-model { display: none; } }
+/* tablets and small laptops (641-1279 px): the Results table as stacked cards, as on phones (two columns of cards so the width is used) */
+@media (min-width: 641px) and (max-width: 1279px) {
+  .table.responsive.report-table thead { display: none; }
+  .table.responsive.report-table, .table.responsive.report-table tbody { display: block; width: 100%; }
+  .table.responsive.report-table tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .table.responsive.report-table tr { display: block; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .table.responsive.report-table tr:nth-child(odd) { border-right: 1px solid var(--border); }
+  .table.responsive.report-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 0; border: 0; text-align: right; white-space: normal; }
+  .table.responsive.report-table td::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; flex: none; }
+  .table.responsive.report-table td.lead-cell { padding-bottom: 8px; justify-content: flex-start; text-align: left; }
+  .table.responsive.report-table td.lead-cell::before, .table.responsive.report-table td.rep-act::before { display: none; }
+  .table.responsive.report-table td .row-actions { justify-content: flex-end; width: 100%; }
+}
+
+/* card layout (phones, tablets, small laptops): the page's 10 cards show in full, no scroll box inside the page (paging already limits them) */
+@media (max-width: 1279px) { .report-card .table-wrap { max-height: none; overflow-y: visible; } }
