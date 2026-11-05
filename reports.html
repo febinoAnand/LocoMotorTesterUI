@@ -56,7 +56,7 @@
         <div>
           <a class="back-link" id="repBack" href="monitor.html" hidden>&larr; Back</a>
           <h2>Results</h2>
-          <p>Choose filters, check the preview, then download the results as CSV or print them as PDF.</p>
+          <p>Completed tests only (Stable or Unstable) · tests in progress are on the Monitor page. Choose filters, check the preview, then download the results as CSV or print them as PDF.</p>
         </div>
         <div class="actions">
           <button class="btn" type="button" data-dl-all-motors title="Every motor's full results (details, aggregation, all readings) in one CSV"><i data-icon="download"></i>All motor results</button>
@@ -65,11 +65,35 @@
         </div>
       </div>
 
-      <section class="card rep-mcard" id="repMotorCard" aria-label="Motor" hidden></section>
+      <section class="card empty-state" id="repRunning" hidden></section>
 
-      <section class="card" id="repTestCard" aria-label="Test" hidden><div class="test-graphs" id="repTest"></div><div class="test-details" id="repTestDetails" hidden></div></section>
+      <section class="card" id="repTestCard" aria-label="Test" hidden><div class="tg-top" id="repTestHead"></div><div class="test-details" id="repTestDetails" hidden></div>
+        <div class="test-live" id="repLive" hidden>
+          <div class="tl-head"><div><h4>Whole test</h4><div class="sub muted" id="repLiveSub"></div></div><div class="legend" id="repLiveLegend"></div></div>
+          <div class="chart" id="repLiveChart"></div>
+        </div>
+        <div class="test-live" id="repRt" hidden>
+          <div class="tl-head"><div><h4>Real-time</h4><div class="sub muted" id="repRtSub"></div></div>
+            <div class="rt-pick">
+              <span class="rt-pick-sel"><select class="select select-sm rt-range" aria-label="Range"></select><select class="select select-sm rt-every" aria-label="Interval"></select></span>
+              <div class="legend" id="repRtLegend"></div>
+            </div></div>
+          <div class="rt-stats rt-stats-flush" id="repRtStats"></div>
+          <div class="chart" id="repRtChart"></div>
+        </div>
+        <div class="test-graphs" id="repTest"></div></section>
 
-      <section class="card">
+      <section class="card" id="repTestLog" aria-label="Change log" hidden>
+        <div class="card-head"><div><h3>Change log</h3><div class="sub" id="repLogSub"></div></div></div>
+        <div class="table-wrap">
+          <table class="table responsive">
+            <thead><tr><th>When</th><th>User</th><th>Change</th></tr></thead>
+            <tbody id="repLogRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="repFilters">
         <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
           <button class="btn btn-sm btn-ghost" type="button" id="repReset"><i data-icon="refresh"></i>Reset filters</button></div>
         <form class="card-body report-filters" id="repForm" onsubmit="return false">
@@ -98,18 +122,13 @@
           <div class="field"><label for="r-motor">Motor</label><select class="select" id="r-motor" name="motor"></select></div>
           <div class="field"><label for="r-cond">Condition</label>
             <select class="select" id="r-cond" name="cond">
-              <option value="all">All conditions</option><option value="ok">Stable</option><option value="warn">Processing</option><option value="crit">Unstable</option><option value="stop">Stopped</option>
+              <option value="all">All conditions</option><option value="ok">Stable</option><option value="crit">Unstable</option>
             </select></div>
           <div class="field"><label for="r-ctype">Condition type</label>
             <select class="select" id="r-ctype" name="ctype">
               <option value="all">All condition types</option>
-              <option value="rise">Rise above ambient out of limits</option>
-              <option value="temp">Motor temperature out of limits</option>
-              <option value="spread" data-sensor-diff>T1 / T2 difference out of limits</option>
-              <option value="pred" data-summary-only>Predicted final rise too high</option>
-              <option value="partner" data-summary-only>Hotter than the other motor</option>
-              <option value="term">Terminal min / max exceeded</option>
-              <option value="probe" data-summary-only>Probe reading fault</option>
+              <option value="temp">Temperature above the limit</option>
+              <option value="hours" data-summary-only>Not settled in time</option>
             </select></div>
           <div class="field rep-readings"><label for="r-range">Time range</label>
             <select class="select" id="r-range" name="range">
@@ -143,7 +162,8 @@
       <section class="card summary-strip" id="repSummary" aria-label="Results summary"></section>
 
       <section class="card report-card">
-        <div class="card-head"><div><h3 id="repTitle">Preview</h3><div class="sub" id="repMeta"></div></div></div>
+        <div class="card-head"><div><h3 id="repTitle">Preview</h3><div class="sub" id="repMeta"></div></div>
+          <button class="btn btn-sm btn-primary" type="button" id="repCsvHist" hidden><i data-icon="download"></i>Download CSV</button></div>
         <div class="print-head" id="repPrintHead"></div>
         <div class="table-wrap">
           <table class="table responsive report-table">
