@@ -61,7 +61,7 @@
         <div class="actions">
           <button class="btn" type="button" data-dl-all-motors title="Every motor's full results (details, aggregation, all readings) in one CSV"><i data-icon="download"></i>All motor results</button>
           <button class="btn" type="button" id="repPrint"><i data-icon="printer"></i>Print / PDF</button>
-          <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i>Download CSV</button>
+          <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i><span id="repCsvLabel">Download CSV</span></button>
         </div>
       </div>
 
@@ -82,16 +82,6 @@
           <div class="chart" id="repRtChart"></div>
         </div>
         <div class="test-graphs" id="repTest"></div></section>
-
-      <section class="card" id="repTestLog" aria-label="Change log" hidden>
-        <div class="card-head"><div><h3>Change log</h3><div class="sub" id="repLogSub"></div></div></div>
-        <div class="table-wrap">
-          <table class="table responsive">
-            <thead><tr><th>When</th><th>User</th><th>Change</th></tr></thead>
-            <tbody id="repLogRows"></tbody>
-          </table>
-        </div>
-      </section>
 
       <section class="card" id="repFilters">
         <div class="card-head"><div><h3>Filters</h3><div class="sub">The preview and the download use the same filters</div></div>
@@ -163,7 +153,7 @@
 
       <section class="card report-card">
         <div class="card-head"><div><h3 id="repTitle">Preview</h3><div class="sub" id="repMeta"></div></div>
-          <button class="btn btn-sm btn-primary" type="button" id="repCsvHist" hidden><i data-icon="download"></i>Download CSV</button></div>
+          <button class="btn btn-sm btn-primary" type="button" id="repCsvHist" hidden><i data-icon="download"></i>Download CSV / PDF</button></div>
         <div class="print-head" id="repPrintHead"></div>
         <div class="table-wrap">
           <table class="table responsive report-table">
@@ -172,6 +162,16 @@
           </table>
         </div>
         <div class="card-foot muted" id="repFoot" style="font-size:12px"></div>
+      </section>
+
+      <section class="card" id="repTestLog" aria-label="Change log" hidden>
+        <div class="card-head"><div><h3>Change log</h3><div class="sub" id="repLogSub"></div></div></div>
+        <div class="table-wrap">
+          <table class="table responsive">
+            <thead><tr><th>When</th><th>User</th><th>Change</th></tr></thead>
+            <tbody id="repLogRows"></tbody>
+          </table>
+        </div>
       </section>
     </main>
   </div>

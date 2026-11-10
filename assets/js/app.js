@@ -2214,9 +2214,9 @@
     const sh = testSheet(x && x.d, m, saved);
     if (!same) {
       box.innerHTML = `<div class="tg-head"><div><b class="mono">${esc(r.testId)}</b></div>
-          <div class="tg-acts"><button type="button" class="btn btn-sm" data-edit-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}" title="Edit test ${esc(r.testId)}: test ID, device, channel, what ${namesOf(m).slice(0, 2).join(" / ")} measure, vibration, motor details">${ico("edit")}Edit test</button>
-          <button type="button" class="btn btn-sm" data-dl-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}">${ico("download")}Download PDF / Excel</button>
-          <button type="button" class="btn btn-sm btn-ghost" data-test-close aria-label="Close test ${esc(r.testId)}">${ico("x")}Close</button></div></div>
+          <div class="tg-acts"><button type="button" class="btn btn-sm" data-edit-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}" title="Edit the details of test ${esc(r.testId)}: test ID, device, channel, what ${namesOf(m).slice(0, 2).join(" / ")} measure, vibration, motor details">${ico("edit")}Edit details</button>
+          <button type="button" class="btn btn-sm" data-dl-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}">${ico("download")}Download CSV / PDF</button>
+          <a class="btn btn-sm btn-ghost" href="reports.html" aria-label="Back to Results">&larr; Back</a></div></div>
         <div class="tg-sheet"></div>`;
     }
     renderSheet($(".tg-sheet", box), sh);
@@ -2361,9 +2361,9 @@
       : `<td class="num${Array.isArray(col) && col[0] ? " t-ok" : ""}">${esc(a)}</td><td class="num${Array.isArray(col) && col[1] ? " t-ok" : ""}">${esc(b)}</td>`}</tr>`).join("");
     return `<div class="sheet-meta"><span>TM NO <b class="mono">${esc(sh.tm)}</b></span><span>DATE <b>${dmy(sh.start)}</b></span></div>
     <div class="sheet">
-      <div class="table-wrap sheet-box"><table class="table sheet-tbl" aria-label="Readings of test ${esc(sh.testId)}">
+      <div class="sheet-read"><div class="table-wrap sheet-box"><table class="table sheet-tbl" aria-label="Readings of test ${esc(sh.testId)}">
         <thead><tr><th>Time</th><th class="num">${N[0]} °C</th><th class="num">Diff</th><th class="num">${N[1]} °C</th><th class="num">Diff</th><th class="num" title="Ambient air">TA °C</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" class="muted">No readings recorded yet</td></tr>`}</tbody></table></div>
+        <tbody>${rows || `<tr><td colspan="6" class="muted">No readings recorded yet</td></tr>`}</tbody></table></div></div>
       <div class="sheet-side"><div class="table-wrap sheet-box"><table class="table sheet-sum" aria-label="Calculated results of test ${esc(sh.testId)}">
         <thead><tr><th></th><th class="num">${N[0]}</th><th class="num">${N[1]}</th></tr></thead><tbody>${sum}</tbody></table></div>
 </div>
@@ -2686,13 +2686,15 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
   }
 
   // ----- downloading -----
-  // ask PDF or Excel, then build the chosen file from the tests' sheets
-  function askFormat(title, sub) {
+  // ask the file format (PDF or Excel; CSV or PDF on a test's own Results page), then build the chosen file
+  const FMT_INFO = { pdf: ["report", "PDF", "Print-ready, one page per test"], xlsx: ["grid", "Excel", ".xlsx with the graph, ready to edit"], csv: ["grid", "CSV", "Plain table: details, results and every reading"] };
+  // set by the Results page while one test is open there: its downloads offer these formats
+  let testPageFormats = null;
+  function askFormat(title, sub, fmts = ["pdf", "xlsx"], notes = {}) {
     return new Promise((resolve) => {
       const d = makeDialog("formatDialog", `${dlgHead(title, sub)}
         <div class="modal-body"><div class="fmt-pick">
-          <button type="button" class="fmt-btn" data-fmt="pdf">${ico("report")}<b>PDF</b><span>Print-ready, one page per test</span></button>
-          <button type="button" class="fmt-btn" data-fmt="xlsx">${ico("grid")}<b>Excel</b><span>.xlsx with the graph, ready to edit</span></button>
+          ${fmts.map((k) => `<button type="button" class="fmt-btn" data-fmt="${k}">${ico(FMT_INFO[k][0])}<b>${FMT_INFO[k][1]}</b><span>${esc(notes[k] || FMT_INFO[k][2])}</span></button>`).join("")}
         </div></div>
         <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button></div>`);
       let picked = null;
@@ -2750,15 +2752,29 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         if (ans === "skipAll") break;
       }
     }
-    const fmt = chosen || (await askFormat(title, sub));
+    const fmt = chosen || (await askFormat(title, sub, testPageFormats || undefined));
     if (!fmt) return;
     const sheets = list.map(({ d, m, r }) => { const sh = testSheet(d, m, r);
       sh.details = sheetDetails(sh, r ? { cur: false, d: DEVICES.find((x) => x.name === r.device) || null, m, r } : { cur: true, d, m, start: m.runStart });
       return sh; });
-    saveBlob(fmt === "pdf" ? pdfSheets(sheets) : xlsxSheets(sheets), `${file}-${fileStamp()}.${fmt}`);
-    const n = sheets.length, label = fmt === "pdf" ? "PDF" : "Excel";
+    if (fmt === "csv") saveCsv(csvSheets(sheets), `${file}-${fileStamp()}.csv`);
+    else saveBlob(fmt === "pdf" ? pdfSheets(sheets) : xlsxSheets(sheets), `${file}-${fileStamp()}.${fmt}`);
+    const n = sheets.length, label = FMT_INFO[fmt][1];
     logActivity("report", `Downloaded ${what} as ${label} · ${n} test${n === 1 ? "" : "s"} (${sheets.map((s) => s.testId).join(", ")})`);
     toast(`Downloaded ${label} · ${n} test${n === 1 ? "" : "s"}`);
+  }
+  // the tests' sheets as CSV rows: per test its details, calculated results and readings, a blank gap between tests
+  function csvSheets(sheets) {
+    const out = [["Report", "TractionTherm test results"], ["Generated", repStamp(Date.now())]];
+    sheets.forEach((sh) => {
+      const N = sh.names;
+      out.push([], [], ["Test ID", sh.testId], ["TM NO", sh.tm], ["Date", dmy(sh.start)], ["Device", sh.device], ["Result", sh.resultText]);
+      out.push([], ["Details"], ...(sh.details || []));
+      out.push([], ["Calculated results", N[0], N[1]], ...sheetSummary(sh).map(([k, a, b]) => [k, a, b === undefined ? a : b]));
+      out.push([], [`Readings (every ${sh.every} min)`], ["Time", `${N[0]} °C`, `${N[0]} diff`, `${N[1]} °C`, `${N[1]} diff`, "TA °C"],
+        ...(sh.rows.length ? sh.rows.map((r) => [repStamp(r.t), f1s(r.v[0]), f1s(r.diff[0]), f1s(r.v[1]), f1s(r.diff[1]), f1s(r.v[AMB])]) : [["No readings recorded yet"]]));
+    });
+    return out;
   }
   // the motor page's "Download test results" button (the Motors page links there with #report)
   function downloadMotorReport(id) {
@@ -3287,10 +3303,10 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
      ========================================================= */
   function pageSettings() {
     const editable = can("limits.update"), L = () => LIM.AC; // one set for both motor types
-    const F = { maxHours: $("#set-hours"), every: $("#set-every"), settleN: $("#set-n"), settleDiff: $("#set-diff"), crit: $("#set-crit"), live: $("#set-live") };
-    const LBL = { maxHours: "maximum test hours", every: "interval time", settleN: "readings", settleDiff: "change less than", crit: "temperature must not exceed", live: "real-time interval" };
-    const UNIT = { maxHours: " h", every: " min", settleN: "", settleDiff: " °C", crit: " °C", live: " s" };
-    const saved = () => ({ maxHours: L().maxHours, every: REC.every, settleN: L().settleN, settleDiff: L().settleDiff, crit: L().crit, live: LIVE_SEC, vib: VIB.ask });
+    const F = { maxHours: $("#set-hours"), every: $("#set-every"), settleN: $("#set-n"), settleDiff: $("#set-diff"), crit: $("#set-crit") };
+    const LBL = { maxHours: "maximum test hours", every: "interval time", settleN: "readings", settleDiff: "change less than", crit: "temperature must not exceed" };
+    const UNIT = { maxHours: " h", every: " min", settleN: "", settleDiff: " °C", crit: " °C" };
+    const saved = () => ({ maxHours: L().maxHours, every: REC.every, settleN: L().settleN, settleDiff: L().settleDiff, crit: L().crit, vib: VIB.ask });
     const read = () => ({ ...Object.fromEntries(Object.entries(F).map(([k, el]) => [k, parseFloat(el.value)])), vib: $("#vibAsk").checked });
     const show = (v) => { Object.entries(F).forEach(([k, el]) => (el.value = v[k])); $("#vibAsk").checked = v.vib; };
     const err = $("#setError"), fail = (m) => { err.textContent = m; err.classList.add("show"); };
@@ -3301,7 +3317,6 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (!Number.isInteger(v.settleN) || v.settleN < 2 || v.settleN > 20) return "Last how many readings: a whole number from 2 to 20.";
       if (!(v.settleDiff >= 0.1 && v.settleDiff <= 10)) return "Change less than: from 0.1 to 10 °C.";
       if (!(v.crit >= 20 && v.crit <= 250)) return "Temperature must not exceed: from 20 to 250 °C.";
-      if (!validLive(v.live)) return `Real-time interval: a whole number of seconds from ${LIVE_MIN} to ${LIVE_MAX}.`;
       if (v.settleN * v.every > v.maxHours * 60) return `${v.settleN} readings every ${v.every} min take ${fmtRun(v.settleN * v.every)}, longer than the maximum ${hoursText(v.maxHours)}: no test could become Stable. Lower the readings or the interval, or raise the maximum hours.`;
       return null;
     };
@@ -3332,12 +3347,11 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       REC.every = v.every; store.set(REC_KEY, { every: v.every });
       VIB.ask = v.vib; store.set(VIB_KEY, { ask: VIB.ask });
       logActivity("limits", `Saved test settings — ${changes.join("; ")}`);
-      if (v.live !== LIVE_SEC) { store.set(LIVE_KEY, { every: v.live }); location.reload(); return; } // the live timers restart at the new rate
       err.classList.remove("show");
       toast("Test settings saved");
       render();
     });
-    $("#setReset").addEventListener("click", () => { if (!editable) return; show({ ...DEFAULT_LIMITS, every: REC_DEFAULT, live: LIVE_DEFAULT, vib: true }); err.classList.remove("show"); render(); });
+    $("#setReset").addEventListener("click", () => { if (!editable) return; show({ ...DEFAULT_LIMITS, every: REC_DEFAULT, vib: true }); err.classList.remove("show"); render(); });
     show(saved());
     // saved in another tab: take the new values, unless this tab has unsaved edits (then say so and keep them)
     let shownSnap = JSON.stringify(read());
@@ -3412,7 +3426,6 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     }
 
     let openTest = q.get("test"), scrollTest = !!openTest; // the test shown with its graphs
-    $("#repTestCard").addEventListener("click", (ev) => { if (ev.target.closest("[data-test-close]")) { openTest = null; history.replaceState(null, "", `reports.html?motor=${encodeURIComponent(f.motor.value)}`); render(); } });
     /* Custom rules: narrow the report by what matters in a motor test — temperatures (in their units),
        condition, equilibrium, monitoring time or the motor's details. Quick rules come from the alarm limits.
        Rows must match all rules or any rule; a rule still missing its value is ignored. */
@@ -3598,6 +3611,9 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       // one test opened: its own page · no filters, the results table below is its motor's history
       $("#repFilters").hidden = !!shownTest;
       $("#repCsvHist").hidden = !shownTest;
+      testPageFormats = shownTest ? ["csv", "pdf"] : null; // a test's own page: every download asks CSV or PDF first
+      $("#repCsvLabel").textContent = shownTest ? "Download CSV / PDF" : "Download CSV";
+      $("#repPrint").hidden = !!shownTest; // its PDF is offered by the download's format choice
       // the test opened from Test history or a Test ID: its graphs, above the filters
       $("#repTestCard").hidden = !shownTest;
       if (mx) testGraphs($("#repTest"), mx.m, runsOf, shownTest);
@@ -3686,21 +3702,31 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       $("#repLogRows").innerHTML = rows.length ? rows.map((a) => `<tr><td data-label="When" class="log-when">${esc(stamp(a.t))}</td><td data-label="User">${esc(a.user)}${a.username ? ` <span class="muted mono">${esc(a.username)}</span>` : ""}</td><td data-label="Change">${esc(a.text)}</td></tr>`).join("")
         : `<tr><td colspan="3" class="muted" style="text-align:center;padding:24px">No changes recorded for this test yet.</td></tr>`;
     }
-    $("#repCsvHist").addEventListener("click", () => $("#repCsv").click());
     $("#repRows").addEventListener("click", (ev) => {
       const tr = ev.target.closest("tr.rep-row"); if (!tr || ev.target.closest("a, button")) return;
       const a = tr.querySelector("a.rep-motor"); if (a) a.click();
     });
-    $("#repCsv").addEventListener("click", () => {
-      if (!allowed("reports.create")) return;
+    const tableCsv = () => {
       if (!report || !report.rows.length) { toast("Nothing to download — change the filters"); return; }
       // "Label: value" → two cells (split at the first ": " only, a search term may contain one)
       const meta = filterText().map((t) => { const i = t.indexOf(": "); return i < 0 ? [t] : [t.slice(0, i), t.slice(i + 2)]; });
       saveCsv([["Report", report.title], ["Generated", stamp(Date.now())], ...meta, [], report.cols, ...report.rows.map((r) => r.cells)], `tractiontherm-${f.type.value}-${fileStamp()}.csv`);
       logActivity("report", `Downloaded ${report.title} CSV — ${report.rows.length} rows · ${filterText().join(" · ")}`);
       toast(`Downloaded ${report.rows.length} rows`);
-    });
-    $("#repPrint").addEventListener("click", () => { if (!allowed("reports.create")) return; render(); logActivity("report", `Printed ${report.title} — ${report.rows.length} rows · ${filterText().join(" · ")}`); window.print(); });
+    };
+    const tablePrint = () => { render(); logActivity("report", `Printed ${report.title} — ${report.rows.length} rows · ${filterText().join(" · ")}`); window.print(); };
+    // the results table: on a test's own page ask CSV or PDF first, elsewhere each button does its own format
+    async function tableDownload(fmt) {
+      if (!allowed("reports.create")) return;
+      if (testPageFormats) {
+        fmt = await askFormat(`Download ${$("#repTitle").textContent}`, `${report ? report.rows.length : 0} row${report && report.rows.length === 1 ? "" : "s"} · choose the file format`, ["csv", "pdf"], { pdf: "Print-ready table · choose “Save as PDF” in the print window" });
+        if (!fmt) return;
+      }
+      (fmt === "csv" ? tableCsv : tablePrint)();
+    }
+    $("#repCsv").addEventListener("click", () => tableDownload("csv"));
+    $("#repCsvHist").addEventListener("click", () => tableDownload("csv"));
+    $("#repPrint").addEventListener("click", () => tableDownload("pdf"));
     const resetRules = () => { rules = []; f.ruleMode.value = "all"; rulesSig = ""; };
     $("#repReset").addEventListener("click", () => { defaults(); syncCtype(); syncSearch(); resetRules(); render(); });
     // custom rules: the rule controls have no name, so they don't clash with the form's filters
