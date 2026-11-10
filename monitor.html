@@ -31,10 +31,6 @@
       <a href="profile.html"><i data-icon="user"></i>My profile</a>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
-    <div class="sidebar-foot">
-      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
-    </div>
   </aside>
   <div class="scrim"></div>
 
@@ -67,6 +63,18 @@
 
       <section aria-label="Devices">
         <div class="grid grid-devices" id="monitorGrid"></div>
+      </section>
+
+      <section class="card mon-live" id="monLive" aria-label="Live readings" hidden>
+        <div class="test-live">
+          <div class="tl-head"><div><h4>Live readings</h4><div class="sub muted" id="monLiveSub"></div></div>
+            <div class="rt-pick">
+              <span class="rt-pick-sel"><select class="select select-sm" id="monLiveMotor" aria-label="Motor"></select><select class="select select-sm rt-range" aria-label="Range"></select></span>
+              <div class="legend" id="monLiveLegend"></div>
+            </div></div>
+          <div class="rt-stats rt-stats-flush" id="monLiveStats"></div>
+          <div class="chart" id="monLiveChart"></div>
+        </div>
       </section>
 
     </main>

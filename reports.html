@@ -31,10 +31,6 @@
       <a href="profile.html"><i data-icon="user"></i>My profile</a>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
-    <div class="sidebar-foot">
-      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
-    </div>
   </aside>
   <div class="scrim"></div>
 
@@ -56,12 +52,11 @@
         <div>
           <a class="back-link" id="repBack" href="monitor.html" hidden>&larr; Back</a>
           <h2>Results</h2>
-          <p>Completed tests only (Stable or Unstable) · tests in progress are on the Monitor page. Choose filters, check the preview, then download the results as CSV or print them as PDF.</p>
+          <p>Completed tests only (Stable or Unstable) · tests in progress are on the Monitor page. Choose filters, check the preview, then download them as CSV or PDF.</p>
         </div>
         <div class="actions">
-          <button class="btn" type="button" data-dl-all-motors title="Every motor's full results (details, aggregation, all readings) in one CSV"><i data-icon="download"></i>All motor results</button>
-          <button class="btn" type="button" id="repPrint"><i data-icon="printer"></i>Print / PDF</button>
-          <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i><span id="repCsvLabel">Download CSV</span></button>
+          <button class="btn" type="button" data-dl-all-motors title="The latest completed test of every motor, one sheet each · you choose the file format"><i data-icon="download"></i>All motor results</button>
+          <button class="btn btn-primary" type="button" id="repCsv"><i data-icon="download"></i>Download CSV / PDF</button>
         </div>
       </div>
 
@@ -75,7 +70,7 @@
         <div class="test-live" id="repRt" hidden>
           <div class="tl-head"><div><h4>Real-time</h4><div class="sub muted" id="repRtSub"></div></div>
             <div class="rt-pick">
-              <span class="rt-pick-sel"><select class="select select-sm rt-range" aria-label="Range"></select><select class="select select-sm rt-every" aria-label="Interval"></select></span>
+              <span class="rt-pick-sel"><select class="select select-sm rt-range" aria-label="Range"></select></span>
               <div class="legend" id="repRtLegend"></div>
             </div></div>
           <div class="rt-stats rt-stats-flush" id="repRtStats"></div>

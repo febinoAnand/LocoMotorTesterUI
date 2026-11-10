@@ -31,10 +31,6 @@
       <a href="profile.html"><i data-icon="user"></i>My profile</a>
       <a href="index.html"><i data-icon="logout"></i>Sign out</a>
     </nav>
-    <div class="sidebar-foot">
-      <div class="sys-status"><span class="pulse"></span>Acquisition running</div>
-      <div style="margin-top:4px">Sampling every <span data-live-every>2 s</span> · UI v1.0</div>
-    </div>
   </aside>
   <div class="scrim"></div>
 
@@ -55,7 +51,7 @@
       <div class="page-head">
         <div>
           <h2>Motor temperatures</h2>
-          <p>Live readings from every device · each device has 2 channels · each motor has <span data-sensor="1">T1</span> and <span data-sensor="2">T2</span> sensors plus ambient TA.</p>
+          <p>Live readings from every device · each device has 2 channels · each motor has two sensors, <span data-sensor="1">T1</span> (<span data-sensor-is="1">DE / PE</span>) and <span data-sensor="2">T2</span> (<span data-sensor-is="2">NDE / CE</span>), plus ambient TA.</p>
         </div>
         <div class="actions">
           <a class="btn" href="reports.html"><i data-icon="report"></i>Results</a>
@@ -71,7 +67,7 @@
         <div class="card-head">
           <div><h3>Motor temperature</h3><div class="sub">Every motor, hottest first · the red line marks the temperature that must not be exceeded · outline = predicted final temperature</div></div>
           <div class="legend">
-            <span><i style="background:var(--series-1)"></i><span data-sensor="1">T1</span></span><span><i style="background:var(--series-2)"></i><span data-sensor="2">T2</span></span>
+            <span><i style="background:var(--series-1)"></i>T1 (DE / PE)</span><span><i style="background:var(--series-2)"></i>T2 (NDE / CE)</span>
           </div>
         </div>
         <div class="card-body" id="riseChart"></div>

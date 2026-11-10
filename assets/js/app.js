@@ -238,8 +238,9 @@
      ========================================================= */
   // two motor types (three-phase, conventional; stored as "AC" / "DC"); the type decides what the two motor sensors are called
   const MOTOR_TYPES = {
-    AC: { label: "Three-phase motor", names: ["DE", "NDE"], is: ["Drive end (DE)", "Non-drive end (NDE)"] },
-    DC: { label: "Conventional motor", names: ["PE", "CE"], is: ["Pinion end (PE)", "Commutator end (CE)"] }
+    // names: the terminals with their slot in brackets, shown everywhere · base: the bare names, for labels that join both types
+    AC: { label: "Three-phase motor", names: ["DE (T1)", "NDE (T2)"], base: ["DE", "NDE"], is: ["Drive end (DE)", "Non-drive end (NDE)"] },
+    DC: { label: "Conventional motor", names: ["PE (T1)", "CE (T2)"], base: ["PE", "CE"], is: ["Pinion end (PE)", "Commutator end (CE)"] }
   };
   const TYPE_IDS = Object.keys(MOTOR_TYPES);
   const typeOf = (rec) => (rec && MOTOR_TYPES[rec.type] ? rec.type : "AC");
@@ -286,11 +287,11 @@
   // slot names: T1 / T2 / TA. Lists that mix motor types use them; a motor's own pages and reports use its type's names
   const T1N = "T1", T2N = "T2", PAIR = `${T1N} / ${T2N}`, DIFF_NAME = `${PAIR} difference`;
   const PROBES = [T1N, T2N, "TA"];
-  const PROBE_NAME = { [T1N]: TYPE_IDS.map((t) => MOTOR_TYPES[t].names[0]).join(" / "), [T2N]: TYPE_IDS.map((t) => MOTOR_TYPES[t].names[1]).join(" / "), TA: "Ambient air" };
+  const PROBE_NAME = { [T1N]: TYPE_IDS.map((t) => MOTOR_TYPES[t].base[0]).join(" / "), [T2N]: TYPE_IDS.map((t) => MOTOR_TYPES[t].base[1]).join(" / "), TA: "Ambient air" };
   // the sensor names of one motor or test: [DE, NDE, TA] or [PE, CE, TA]
   const namesOf = (rec) => [...MOTOR_TYPES[typeOf(rec)].names, "TA"];
   const pairOf = (rec) => namesOf(rec).slice(0, 2).join(" / ");
-  // what a terminal measures in one test (rec: a motor's current test or a saved one): set in Edit test, else from the motor type
+  // what a terminal measures in one test (rec: a motor's current test or a saved one): set in Edit details, else from the motor type
   const probeIs = (rec, j) => (j === 2 ? PROBE_NAME.TA : ((rec && rec.termIs) || {})[j ? "t2" : "t1"] || MOTOR_TYPES[typeOf(rec)].is[j]);
   // what a terminal can measure: the measuring points of the motor type (plus a value saved earlier that isn't one of them)
   const termOptions = (type, keep) => [...new Set([...MOTOR_TYPES[type].is, keep].filter(Boolean))];
@@ -326,7 +327,7 @@
       motors: [
         { id: "TM-3810", testId: "TEST-0003", stator: "ST-15251", type: "DC", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [66, 69, 33], runMin: 62, tau: 15, channel: 1 },
         { id: "TM-3811", testId: "TEST-0004", stator: "ST-15252", type: "DC", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [57, 59, 33], runMin: 62, tau: 15, channel: 2 },
-        { id: "TM-5121", testId: "TEST-0005", stator: "ST-65912", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [41, 53, 29], runMin: 70, tau: 10, active: false, channel: 1 }
+        { id: "TM-5121", testId: "TEST-0005", stator: "ST-65912", type: "DC", model: "TAO 659 · DC series", loco: "WAG-7 #27850", base: [41, 53, 29], runMin: 70, tau: 10, active: false, channel: 1 }
       ] }
   ];
 
@@ -400,29 +401,23 @@
   const histPoints = (m, from = 0) => { const out = [], lo = Math.max(from, m.runStart || 0);
     m.hist.t.forEach((t, i) => { if (t >= lo) out.push({ t, v: m.hist.v.map((a) => a[i]) }); }); return out; };
   const RT_RANGES = { 5: "Last 5 min", 15: "Last 15 min", 30: "Last 30 min", 60: "Last 1 h", all: "Whole test" };
-  const RT_STEPS = [10, 30, 60, 300];
+  // the interval follows the range, so a graph keeps roughly 60–150 points: every sample for the last 5 min, fewer for longer ranges
+  const RT_STEP_OF = { 5: 0, 15: 10, 30: 30, 60: 60, all: 300 }; // seconds; 0 = every sample (live)
   const stepText = (sec) => (sec < 60 ? `every ${sec} s` : sec === 60 ? "every 1 min" : `every ${sec / 60} min`);
-  // [value, label] in display order: live first (an object would list the number keys first)
-  const rtEveryOpts = () => [["live", `Live · every ${LIVE_SEC} s`], ...RT_STEPS.filter((x) => x > LIVE_SEC).map((x) => [String(x), stepText(x).replace(/^e/, "E")])];
-  const RT_PICK = { range: "5", every: "live" };
-  try { Object.assign(RT_PICK, JSON.parse(localStorage.getItem("tt-rt-pick") || "{}")); } catch (e) { /* defaults */ }
-  const rtSec = () => (RT_PICK.every === "live" ? LIVE_SEC : +RT_PICK.every);
-  const rtFits = (sec, range) => range === "all" || (+range * 60) / sec >= 3; // an interval needs at least 3 points in the range
-  function rtCheckPick() {
-    if (!RT_RANGES[RT_PICK.range]) RT_PICK.range = "5";
-    if (!rtEveryOpts().some(([k]) => k === RT_PICK.every) || !rtFits(rtSec(), RT_PICK.range)) RT_PICK.every = "live";
-  }
+  const RT_PICK = { range: "5" };
+  try { RT_PICK.range = JSON.parse(localStorage.getItem("tt-rt-pick") || "{}").range || RT_PICK.range; } catch (e) { /* defaults */ }
+  const rtSec = () => Math.max(LIVE_SEC, RT_STEP_OF[RT_PICK.range] || 0);
+  function rtCheckPick() { if (!RT_RANGES[RT_PICK.range]) RT_PICK.range = "5"; }
   rtCheckPick();
-  // fill every picker on the page (they all show the same choice)
+  // fill every range picker on the page (they all show the same choice)
   function rtSyncPickers() {
     rtCheckPick();
     $$(".rt-range").forEach((sel) => (sel.innerHTML = Object.entries(RT_RANGES).map(([k, l]) => `<option value="${k}"${k === RT_PICK.range ? " selected" : ""}>${l}</option>`).join("")));
-    $$(".rt-every").forEach((sel) => (sel.innerHTML = rtEveryOpts().map(([k, l]) => `<option value="${k}"${k === RT_PICK.every ? " selected" : ""}${rtFits(k === "live" ? LIVE_SEC : +k, RT_PICK.range) ? "" : " disabled"}>${l}</option>`).join("")));
   }
-  const rtPickHtml = () => `<span class="rt-pick-sel"><select class="select select-sm rt-range" aria-label="Range"></select><select class="select select-sm rt-every" aria-label="Interval"></select></span>`;
+  const rtPickHtml = () => `<span class="rt-pick-sel"><select class="select select-sm rt-range" aria-label="Range"></select></span>`;
   document.addEventListener("change", (e) => {
-    const t = e.target; if (!t.classList || !(t.classList.contains("rt-range") || t.classList.contains("rt-every"))) return;
-    RT_PICK[t.classList.contains("rt-range") ? "range" : "every"] = t.value;
+    const t = e.target; if (!t.classList || !t.classList.contains("rt-range")) return;
+    RT_PICK.range = t.value;
     try { localStorage.setItem("tt-rt-pick", JSON.stringify(RT_PICK)); } catch (err) { /* only this browser */ }
     rtSyncPickers(); rerender();
   });
@@ -435,7 +430,9 @@
       pts = pts.slice().reverse().filter((p) => { const b = Math.floor((end - p.t + STEP_MS / 2) / every); if (seen.has(b)) return false; seen.add(b); return true; }).reverse(); }
     const older = all && pts.length && pts[0].t < (histPoints(m)[0] || { t: Infinity }).t && every < 60000;
     const long = all || +RT_PICK.range > 15;
-    return { pts, older, step: stepText(rtSec()),
+    // the axis spans the whole chosen range (from the test start when the test is younger than that)
+    const from = all ? (pts.length ? pts[0].t : end) : Math.max(end - +RT_PICK.range * 60000, m.runStart || 0);
+    return { pts, older, from, step: stepText(rtSec()),
       label: `${RT_RANGES[RT_PICK.range]} · ${stepText(rtSec())} · ${pts.length} readings${older ? " · readings older than 1 h are one a minute" : ""}`,
       xfmt: (t) => new Date(t).toLocaleTimeString([], long ? { hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit", second: "2-digit" }) };
   }
@@ -699,7 +696,8 @@
   const statusCell = (d) => (d.online ? `<span class="badge ok"><span class="pulse"></span>Online</span>` : `${badge("off")}<span class="muted last-seen">Last seen ${esc(d.lastSeen || "—")}</span>`);
 
   function updateAlertCount() {
-    const n = liveMotors().filter((x) => evalMotor(x.m).status !== "ok").length;
+    // motors that need attention, plus devices that stopped reporting while checking motors
+    const n = liveMotors().filter((x) => evalMotor(x.m).status !== "ok").length + DEVICES.filter((d) => !d.online && runningOn(d).length).length;
     $$("[data-alert-count]").forEach((el) => { el.textContent = n; el.hidden = n === 0; });
     $$("[data-alert-dot]").forEach((el) => (el.hidden = n === 0));
   }
@@ -913,7 +911,7 @@
           <div class="tm-head"><span>Terminal</span><span>Reading</span><span>Measures</span></div>
           ${row(0, "t1Is")}${row(1, "t2Is")}
           ${isRunning(m) ? `<label class="te-swap"><input type="checkbox" name="swap"><span>${namesOf(m).slice(0, 2).join(" and ")} are connected the wrong way round · swap their readings</span></label>` : ""}
-          <p class="form-note">${ico("cpu")}<span>Applies to this test only · the next test starts from the names in Settings. Earlier tests can be corrected with Edit test.</span></p>
+          <p class="form-note">${ico("cpu")}<span>Applies to this test only · the next test starts from the names in Settings. Earlier tests can be corrected with Edit details.</span></p>
         </div>
         <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save terminals</button></div>
       </form>`);
@@ -957,7 +955,7 @@
     const clean = (v) => (v === "—" ? "" : v || "");
     const d = makeDialog("testEditDialog", `
       <form id="testEditForm" novalidate style="display:contents">
-        ${dlgHead(`Edit test ${testId}`, `${m.untitled ? "New motor" : m.id} · ${running ? "being checked now" : "finished test"} · its readings stay with it`)}
+        ${dlgHead(`Edit details · ${testId}`,`${m.untitled ? "New motor" : m.id} · ${running ? "being checked now" : "finished test"} · its readings stay with it`)}
         <div class="modal-body">
           <div class="form-error" id="teError" role="alert"></div>
           <h4 class="te-h">Test <small>can't be edited</small></h4>
@@ -979,7 +977,7 @@
             <div class="field"><label for="te-type">Motor type</label><select class="select" id="te-type" name="type">${TYPE_IDS.map((t) => `<option value="${t}">${MOTOR_TYPES[t].label} · sensors ${MOTOR_TYPES[t].names.join(" / ")}</option>`).join("")}</select></div>
           </div>
         </div>
-        <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save test</button></div>
+        <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save details</button></div>
       </form>`, true);
     const f = d.querySelector("#testEditForm"), el = f.elements, err = d.querySelector("#teError");
     // another motor type: its own measuring points (same position kept: drive end ↔ pinion end, non-drive end ↔ commutator end)
@@ -1489,9 +1487,9 @@
     drawLine(el);
   }
   function drawLine(el) {
-    const { series, lines = [], start, unit = "°C", height = 260, title = "Run trend", now = null, xfmt = null } = el._cfg;
+    const { series, lines = [], start, unit = "°C", height = 260, title = "Run trend", now = null, xfmt = null, clockTicks = false } = el._cfg;
     const svg = el.querySelector(".chart-plot > svg"), tip = el.querySelector(".chart-plot > .chart-tip");
-    const W = Math.max(el.clientWidth, 280), H = height, M = { t: 16, r: 74, b: 28, l: 40 };
+    const W = Math.max(el.clientWidth, 280), H = height, M = { t: 16, r: W < 480 ? 86 : 100, b: 28, l: 40 }; // r: room for end labels like "NDE (T2) 32.4"
     const all = series.flatMap((s) => s.points);
     if (all.length < 2) { svg.innerHTML = ""; return; }
     const t0 = start ?? Math.min(...all.map((p) => p.t)), t1 = Math.max(...all.map((p) => p.t), t0 + 60000);
@@ -1510,6 +1508,20 @@
     const lw = String(xfmt ? xfmt(t1) : runLabel(t1, t0)).length * 5.6 + 6;
     let nx = 4;
     while (nx > 1 && span / nx < lw * 1.5) nx--;
+    if (clockTicks) {
+      // real-time graphs: labels on round clock times (every 1, 5, 10 … min) instead of equal fractions of the range
+      const STEPS = [10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600].map((s) => s * 1000);
+      const lwClock = new Date(t1).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).length * 5.6 + 6;
+      const most = Math.max(3, Math.min(7, Math.floor(span / (lwClock * 1.25)))); // at least 3 labels, even on a phone
+      const st = STEPS.find((s) => (t1 - t0) / s <= most) || STEPS[STEPS.length - 1];
+      const off = new Date(t0).getTimezoneOffset() * 60000; // round in local time, so hours land on :00
+      const fmt = (t) => new Date(t).toLocaleTimeString([], st < 60000 ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+      for (let t = Math.ceil((t0 - off) / st) * st + off; t <= t1; t += st) {
+        const px = x(t), anchor = px - M.l < lw / 2 ? "start" : W - M.r - px < lw / 2 ? "end" : "middle";
+        out += `<line class="gridline" x1="${px}" x2="${px}" y1="${M.t}" y2="${H - M.b}" style="opacity:.5"/><text class="tick-label" x="${px}" y="${H - 8}" text-anchor="${anchor}">${fmt(t)}</text>`;
+      }
+      nx = -1; // skip the fraction labels below
+    }
     for (let k = 0; k <= nx; k++) {
       const t = t0 + ((t1 - t0) * k) / nx;
       out += `<text class="tick-label" x="${x(t)}" y="${H - 8}" text-anchor="${k === 0 ? "start" : k === nx ? "end" : "middle"}">${xfmt ? xfmt(t) : runLabel(t, t0)}</text>`;
@@ -1581,10 +1593,10 @@
   // the same motors as a table: each sensor's temperature, the hottest, the predicted final temperature, the test time and the condition
   function riseTable(rows) {
     const cls = (v, L) => (v > L.crit ? "t-crit" : "");
-    return `<div class="table-wrap"><table class="table responsive chart-tbl rise-tbl"><thead><tr><th>Motor</th><th>Device</th><th>Type</th>${MS.map((j) => `<th class="num" title="${PROBE_NAME[PROBES[j]]}"><i class="sw" style="background:${COLORS[j]}"></i>${PROBES[j]} °C</th>`).join("")}<th class="num">Hottest °C</th><th class="num">Predicted final °C</th><th class="num">Test time</th><th>Condition</th></tr></thead>
+    return `<div class="table-wrap"><table class="table responsive chart-tbl rise-tbl"><thead><tr><th>Motor</th><th>Device · type</th>${MS.map((j) => `<th class="num" title="${PROBE_NAME[PROBES[j]]}"><i class="sw" style="background:${COLORS[j]}"></i>${PROBES[j]} °C</th>`).join("")}<th class="num">Hottest °C</th><th class="num">Predicted final °C</th><th class="num">Test time</th><th>Condition</th></tr></thead>
       <tbody>${rows.map(({ d, m, e }) => {
         const conf = e.th && e.th.confident, L = limitsOf(m), N = namesOf(m);
-        return `<tr><td class="lead-cell" data-label="Motor"><a class="mono" href="motor.html?motor=${encodeURIComponent(m.id)}">${esc(m.id)}</a></td><td data-label="Device">${esc(d.name)}</td><td data-label="Type">${typeShort(m)}</td>
+        return `<tr><td class="lead-cell" data-label="Motor"><a class="mono" href="motor.html?motor=${encodeURIComponent(m.id)}">${esc(m.id)}</a></td><td data-label="Device · type"><div class="cell-stack">${esc(d.name)}<small class="muted cell-sub">${typeShort(m)}</small></div></td>
           ${MS.map((j) => `<td data-label="${N[j]} °C" class="num ${cls(m.live[j], L)}"><small class="muted">${N[j]}</small> ${m.live[j].toFixed(1)}</td>`).join("")}
           <td data-label="Hottest °C" class="num ${cls(e.hot, L)}"><b>${e.hot.toFixed(1)}</b></td>
           <td data-label="Predicted final °C" class="num ${conf ? cls(e.th.finalTemp, L) : ""}">${conf ? e.th.finalTemp.toFixed(1) : '<span class="muted">Collecting data</span>'}</td>
@@ -1712,8 +1724,14 @@
 
       // alarm banner: only motors that need action
       const bad = evals.filter((x) => x.e.status !== "ok").sort((a, b) => RANK[b.e.status] - RANK[a.e.status]);
-      $("#alarmBar").hidden = !bad.length;
-      $("#alarmBar").innerHTML = bad.map(({ d, m, e }) => `
+      // a device that stopped reporting: its motors drop out of the live list, so say so first
+      const down = DEVICES.filter((d) => !d.online && runningOn(d).length);
+      $("#alarmBar").hidden = !bad.length && !down.length;
+      $("#alarmBar").innerHTML = down.map((d) => `
+        <a class="alarm-row off" href="device.html?device=${encodeURIComponent(d.id)}">
+          ${ico(STATUS.off.icon)}<b>${esc(d.name)}</b><span class="alarm-where">${esc(d.id)}</span>
+          <span class="alarm-reason">Not reporting${d.lastSeen ? ` since ${esc(d.lastSeen)}` : ""} · ${runningOn(d).map((m) => esc(m.id)).join(", ")} not monitored</span><em>Offline</em>
+        </a>`).join("") + bad.map(({ d, m, e }) => `
         <a class="alarm-row ${e.status}" href="motor.html?motor=${encodeURIComponent(m.id)}">
           ${ico(STATUS[e.status].icon)}<b>${esc(m.id)}</b><span class="alarm-where">${esc(d.name)}</span>
           <span class="alarm-reason">${esc(reasonOf(e))}</span><em>${VERDICT_SHORT[e.status]}</em>
@@ -1756,7 +1774,27 @@
     let pressing = false;
     $("#monitorGrid").addEventListener("pointerdown", () => (pressing = true));
     ["pointerup", "pointercancel"].forEach((t) => window.addEventListener(t, () => setTimeout(() => (pressing = false), 50)));
+    // Live readings: one motor being checked now (picked from the list), its latest values, live graph and readings table
+    let liveId = null;
+    $("#monLiveMotor").addEventListener("change", (e) => { liveId = e.target.value; drawLive(); });
+    function drawLive() {
+      const list = liveMotors(), box = $("#monLive");
+      box.hidden = !list.length;
+      if (!list.length) return;
+      if (!list.some(({ m }) => m.id === liveId)) liveId = list[0].m.id;
+      const sel = $("#monLiveMotor"), opts = list.map(({ d, m }) => `<option value="${esc(m.id)}"${m.id === liveId ? " selected" : ""}>${esc(m.id)} · ${esc(d.name)} ${chLabel(m)}</option>`).join("");
+      if (sel._opts !== opts && document.activeElement !== sel) { sel._opts = opts; sel.innerHTML = opts; }
+      const { m } = list.find((x) => x.m.id === liveId), N = namesOf(m), rt = rtPoints(m);
+      $("#monLiveSub").textContent = `${rt.label} · newest first in the table · hover the graph for values`;
+      $("#monLiveLegend").innerHTML = N.map((p, j) => `<span><i style="background:${COLORS[j]}"></i>${p}</span>`).join("") + `<span><i class="dash"></i>Limit</span>`;
+      const back = Math.min(30, m.hist.t.length - 1), n = m.hist.t.length, span = back > 0 ? (m.hist.t[n - 1] - m.hist.t[n - 1 - back]) / 60000 : 1;
+      $("#monLiveStats").innerHTML = 
+        MS.map((j) => { const a = m.hist.v[j], rate = back > 0 ? (a[n - 1] - a[n - 1 - back]) / span : 0; return `<span>${N[j]} <b class="num">${a[n - 1].toFixed(1)} °C</b> <small class="num">${rate >= 0 ? "+" : ""}${rate.toFixed(2)} °C/min</small></span>`; }).join("") +
+        `<span>TA <b class="num">${m.live[AMB].toFixed(1)} °C</b></span><a class="mon-live-open" href="motor.html?motor=${encodeURIComponent(m.id)}">Open ${esc(m.id)} ${ico("chevronRight")}</a>`;
+      lineChart($("#monLiveChart"), { series: rtSeries(m, rt.pts), lines: runLines(m), start: rt.from, clockTicks: true, unit: "°C", height: 260, title: `${m.id} live readings`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
+    }
     const render = () => {
+      drawLive();
       if (pressing) return; // redrawing under a press would swallow the click
       const devs = DEVICES.filter((d) => filter === "all" || d.online);
       $("#monitorGrid").innerHTML = devs.length ? devs.map((d) => deviceWidget(d, null, d.id === target)).join("")
@@ -2190,7 +2228,7 @@
         <td data-label="Max ${namesOf(r.type ? r : m)[1]} °C" class="num">${r.nde.toFixed(1)}</td>
         <td data-label="Max rise °C" class="num">${r.rise.toFixed(1)}</td>
         <td data-label="Result">${r.result ? verdictPill(r.result) : '<span class="muted">In progress</span>'}</td>
-        <td data-label="Actions" class="hist-dl"><button type="button" class="btn btn-sm btn-ghost" data-edit-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}" aria-label="Edit test ${esc(r.testId)}" title="Edit test ${esc(r.testId)}">${ico("edit")}</button> <button type="button" class="btn btn-sm" data-dl-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}" title="Download the results of test ${esc(r.testId)}">${ico("download")}<span>Download</span></button></td>
+        <td data-label="Actions" class="hist-dl"><button type="button" class="btn btn-sm btn-ghost" data-edit-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}" aria-label="Edit details of test ${esc(r.testId)}" title="Edit details of test ${esc(r.testId)}">${ico("edit")}</button> <button type="button" class="btn btn-sm" data-dl-test="${esc(r.testId)}" data-dl-motor="${esc(m.id)}" title="Download the results of test ${esc(r.testId)}">${ico("download")}<span>Download</span></button></td>
       </tr>`).join("");
   // rows change every sample while a test runs: only touch them when they differ, so a click or keyboard focus isn't lost
   const setRows = (el, html) => { if (el._html !== html) { el._html = html; el.innerHTML = html; } };
@@ -2222,36 +2260,47 @@
     renderSheet($(".tg-sheet", box), sh);
   }
 
-  /* ---------- Pagination: every list table shows 10 rows a page ----------
-     Runs after any table is (re)drawn, before the page is painted; the page number is kept while live tables refresh. */
-  const PAGE_SIZE = 10, PAGED = "#devRows, #dmRows, #motorRows, #repRows, #repLogRows, #userRows, #actRows, #histRows, tbody[id^='dvHist'], .chart-table tbody, .sheet-tbl tbody";
+  /* ---------- Pagination: every list table shows 10 rows a page (Rows per page: 10 / 25 / 50 / 100) ----------
+     Runs after any table is (re)drawn, before the page is painted; the page number and size are kept while live tables refresh. */
+  const PAGE_SIZE = 10, PAGE_SIZES = [10, 25, 50, 100], PAGED = "#devRows, #dmRows, #motorRows, #repRows, #repLogRows, #userRows, #actRows, #histRows, tbody[id^='dvHist'], .chart-table tbody, .sheet-tbl tbody";
   const pageState = new Map();
   function paginate() {
     $$(PAGED).forEach((tb) => {
       if (tb.tagName !== "TBODY" || !tb.closest("table")) return;
       const host = tb.closest("[id]") || document.body, key = `${host.id}:${[...host.querySelectorAll("tbody")].indexOf(tb)}`;
-      const rows = [...tb.children].filter((r) => r.tagName === "TR"), n = rows.length, pages = Math.ceil(n / PAGE_SIZE);
+      const rows = [...tb.children].filter((r) => r.tagName === "TR"), n = rows.length;
       const table = tb.closest("table"), anchor = table.closest(".table-wrap") || table;
       let pg = anchor.nextElementSibling && anchor.nextElementSibling.classList.contains("pager") ? anchor.nextElementSibling : null;
-      if (pages <= 1) { rows.forEach((r) => r.classList.contains("pg-hide") && r.classList.remove("pg-hide")); if (pg) pg.remove(); return; }
-      const live = !!tb.closest(".chart-table"), st = pageState.get(key) || { page: 1, n };
+      // a table that fits on the smallest page needs no pager
+      if (n <= PAGE_SIZES[0]) { rows.forEach((r) => r.classList.contains("pg-hide") && r.classList.remove("pg-hide")); if (pg) pg.remove(); return; }
+      const live = !!tb.closest(".chart-table"), st = pageState.get(key) || { page: 1, n, size: PAGE_SIZE };
       if (st.n !== n && !live) st.page = 1; // the list changed (filters, new entries): back to the first page
+      const pages = Math.ceil(n / st.size);
       st.n = n; st.page = Math.min(Math.max(1, st.page), pages); pageState.set(key, st);
-      const a = (st.page - 1) * PAGE_SIZE, b = Math.min(n, a + PAGE_SIZE);
+      const a = (st.page - 1) * st.size, b = Math.min(n, a + st.size);
       rows.forEach((r, i) => { const h = i < a || i >= b; if (r.classList.contains("pg-hide") !== h) r.classList.toggle("pg-hide", h); });
-      const sig = `${st.page}/${pages}/${n}`;
+      const sig = `${st.page}/${pages}/${n}/${st.size}`;
       if (pg && pg.dataset.sig === sig) return;
       if (!pg) { pg = document.createElement("div"); pg.className = "pager"; anchor.after(pg); }
       const nums = [...new Set([1, st.page - 1, st.page, st.page + 1, pages])].filter((x) => x >= 1 && x <= pages).sort((x, y) => x - y);
       const btn = (to, label, on = false, dis = false) => `<button type="button" class="btn btn-sm ${on ? "btn-primary" : "btn-ghost"}" data-pg="${to}"${dis ? " disabled" : ""}${on ? ' aria-current="page"' : ""}>${label}</button>`;
       pg.dataset.sig = sig; pg.dataset.key = key;
-      pg.innerHTML = `<span class="pager-info">Showing <b>${a + 1}–${b}</b> of <b>${n}</b></span><nav class="pager-btns" aria-label="Pages">${btn(st.page - 1, "‹ Prev", false, st.page === 1)}${nums.map((x, i) => `${i && x - nums[i - 1] > 1 ? '<span class="pager-gap">…</span>' : ""}${btn(x, x, x === st.page)}`).join("")}${btn(st.page + 1, "Next ›", false, st.page === pages)}</nav>`;
+      pg.innerHTML = `<span class="pager-info">Showing <b>${a + 1}–${b}</b> of <b>${n}</b></span>
+        <label class="pager-size">Rows per page <select class="select select-sm" data-pg-size>${PAGE_SIZES.map((v) => `<option value="${v}"${v === st.size ? " selected" : ""}>${v}</option>`).join("")}</select></label>
+        <nav class="pager-btns" aria-label="Pages">${btn(st.page - 1, "‹ Prev", false, st.page === 1)}${nums.map((x, i) => `${i && x - nums[i - 1] > 1 ? '<span class="pager-gap">…</span>' : ""}${btn(x, x, x === st.page)}`).join("")}${btn(st.page + 1, "Next ›", false, st.page === pages)}</nav>`;
     });
   }
   document.addEventListener("click", (e) => {
     const b = e.target.closest(".pager [data-pg]"); if (!b || b.disabled) return;
     const st = pageState.get(b.closest(".pager").dataset.key); if (!st) return;
     st.page = +b.dataset.pg; b.closest(".pager").dataset.sig = ""; paginate();
+  });
+  // a new page size keeps the first row on screen in view
+  document.addEventListener("change", (e) => {
+    const sel = e.target.closest(".pager [data-pg-size]"); if (!sel) return;
+    const st = pageState.get(sel.closest(".pager").dataset.key); if (!st) return;
+    const first = (st.page - 1) * st.size;
+    st.size = +sel.value; st.page = Math.floor(first / st.size) + 1; sel.closest(".pager").dataset.sig = ""; paginate();
   });
   // the Test ID opens that test on the Results page
   const testLink = (id, tid) => `<a class="rep-motor" href="${testHref(id, tid)}" title="Open test ${esc(tid)}">${esc(tid)}</a>`;
@@ -2307,6 +2356,8 @@
   const CTYPE_NAME = { temp: "Temperature above the limit", hours: "Not settled in time" };
   const failing = (e, type) => e.checks.some((c) => c.t === type && c.s !== "ok");
   // every field of one test (Results table, its Full details, and the downloaded report). Slot names T1 / T2: lists mix motor types
+  // the key columns of a test result: the Results table on screen and its PDF
+  const KEY_COLS_PDF = ["Test ID", "Motor", "Condition", "Started", "Monitoring for", "Rise °C", "Device", "Model / type"];
   const TEST_COLS = ["Test ID", "Motor", "Stator No.", "Model / type", "Locomotive", "Device", "Channel", "Location", "Started", "Monitoring for", "State", ...PROBES.map((p) => `${p} °C`), "Rise °C", `${PAIR} Δ °C`, "Predicted final °C", "τ min", "Settled",
     "Initial ambient °C", "Final ambient °C", `Temp raise ${T1N} °C`, `Temp raise ${T2N} °C`, `Max diff last 1 h ${T1N} °C`, `Max diff last 1 h ${T2N} °C`, "Largest change, settle check °C",
     `Vibration ${T1N} mm/s`, `Vibration ${T1N} gE`, `Vibration ${T2N} mm/s`, `Vibration ${T2N} gE`, "Condition", "Reason"];
@@ -2335,7 +2386,7 @@
   // the Full details of a sheet's test, for the downloaded report: [label, value] with the motor's own sensor names
   const sheetDetails = (sh, t) => {
     // the PDF fonts have no Δ or τ: spelled out
-    const row = testRow(t, sh), nm = (c) => c.replace("Δ", "difference").replace("τ min", "Time constant (tau) min").replace(PAIR, sh.names.join(" / ")).replace(/\bT1\b/, sh.names[0]).replace(/\bT2\b/, sh.names[1]); // T1N / T2N
+    const row = testRow(t, sh), nm = (c) => c.replace("Δ", "difference").replace("τ min", "Time constant (tau) min").replace(/\bT([12])\b/g, (_, k) => sh.names[k - 1]); // T1 / T2 → the motor's names, in one pass (the names themselves contain "(T1)")
     return TEST_COLS.map((c, i) => [nm(c), row.cells[i] === "" || row.cells[i] == null ? "—" : String(row.cells[i])]);
   };
   const f1s = (v) => (v == null || !isFinite(v) ? "—" : (Math.abs(v) < 0.05 ? 0 : v).toFixed(1));
@@ -2541,6 +2592,48 @@
     });
     return pdfFile(pages, `${sheets.length === 1 ? sheets[0].tm : "TractionTherm"} test report`);
   }
+  // characters the PDF fonts can't draw, spelled out
+  const pdfPlain = (s) => String(s ?? "").replace(/→/g, "->").replace(/←/g, "<-").replace(/Δ/g, "diff").replace(/τ/g, "tau").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/≥/g, ">=").replace(/≤/g, "<=").replace(/×/g, "x");
+  /* A list as a PDF table (Results table, Activity log): A4 landscape, a title band, the filters, then the rows.
+     Long text wraps inside its column; the column heads repeat on every page; pages are numbered.
+     cols: [{ h: heading, w: relative width, right: numbers }], rows: [[cell text]], tone(row, col): "ok" | "crit" | null */
+  function pdfTableDoc({ title, sub = [], cols, rows, tone = () => null }) {
+    const X0 = 28, W = 842 - X0 * 2, BOTTOM = 595 - 34, SIZE = 8, LH = 10.5, PAD = 6;
+    const tw = cols.reduce((a, c) => a + c.w, 0), cw = cols.map((c) => (c.w / tw) * W);
+    const wrap = (s, w, bold) => { const out = []; let line = "";
+      pdfPlain(s).split(/\s+/).filter(Boolean).forEach((word) => {
+        while (pdfWidth(word, SIZE, bold) > w) { let k = word.length; while (k > 1 && pdfWidth(word.slice(0, k), SIZE, bold) > w) k--; if (line) { out.push(line); line = ""; } out.push(word.slice(0, k)); word = word.slice(k); }
+        const t = line ? `${line} ${word}` : word; if (pdfWidth(t, SIZE, bold) > w && line) { out.push(line); line = word; } else line = t; });
+      if (line) out.push(line); return out.length ? out : [""]; };
+    const pages = []; let pg, y;
+    const head = () => {
+      pg = pdfPage(); pages.push(pg);
+      pg.round(X0, 22, W, 34, 8, { fill: UI.brand });
+      pg.text(pdfPlain(title), X0 + 16, 44, { size: 13, bold: true, color: UI.white });
+      pg.text(`Generated ${repStamp(Date.now())}`, X0, 44, { size: 8, color: "#c9dbf6", align: "right", w: W - 12 });
+      y = 68;
+      if (pages.length === 1) sub.forEach((s) => wrap(s, W, false).forEach((l) => { pg.text(l, X0, y, { size: 8, color: UI.text2 }); y += LH; }));
+      y += 4;
+      const hh = 20; pg.round(X0, y, W, hh, 5, { fill: UI.soft });
+      let cx = X0; cols.forEach((c, k) => { pg.text(pdfPlain(c.h).toUpperCase(), cx + PAD, y + 13, { size: 7, bold: true, color: UI.brandDark, align: c.right ? "right" : "left", w: c.right ? cw[k] - PAD + 3 : cw[k] - PAD }); cx += cw[k]; });
+      y += hh;
+    };
+    head();
+    if (!rows.length) { pg.text("No rows match these filters.", X0 + PAD, y + 16, { size: 9, color: UI.muted }); }
+    rows.forEach((r, i) => {
+      const lines = r.map((c, k) => wrap(c, cw[k] - PAD * 2, false)), h = Math.max(...lines.map((l) => l.length)) * LH + PAD;
+      if (y + h > BOTTOM) head();
+      if (i % 2) pg.rect(X0, y, W, h, { fill: UI.band });
+      let cx = X0;
+      lines.forEach((ls, k) => { const t = tone(r, k), col = t === "ok" ? UI.ok : t === "crit" ? "#b42318" : UI.text;
+        ls.forEach((l, n) => pg.text(l, cx + PAD, y + PAD + 6 + n * LH, { size: SIZE, bold: !!t || k === 0, color: col, align: cols[k].right ? "right" : "left", w: cols[k].right ? cw[k] - PAD + 3 : 0 }));
+        cx += cw[k]; });
+      pg.line([[X0, y + h], [X0 + W, y + h]], { color: UI.border, lw: 0.5 });
+      y += h;
+    });
+    pages.forEach((p, i) => p.text(`${pdfPlain(title)} · page ${i + 1} of ${pages.length}`, X0, 595 - 16, { size: 7, color: UI.muted, align: "right", w: W }));
+    return pdfFile(pages, pdfPlain(title));
+  }
 
   // ----- Excel (.xlsx): a zip of XML parts -----
   const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -2686,11 +2779,9 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
   }
 
   // ----- downloading -----
-  // ask the file format (PDF or Excel; CSV or PDF on a test's own Results page), then build the chosen file
-  const FMT_INFO = { pdf: ["report", "PDF", "Print-ready, one page per test"], xlsx: ["grid", "Excel", ".xlsx with the graph, ready to edit"], csv: ["grid", "CSV", "Plain table: details, results and every reading"] };
-  // set by the Results page while one test is open there: its downloads offer these formats
-  let testPageFormats = null;
-  function askFormat(title, sub, fmts = ["pdf", "xlsx"], notes = {}) {
+  // every download asks the file format first: CSV or PDF (the Excel writer above is kept, not offered)
+  const FMT_INFO = { pdf: ["report", "PDF", "Print-ready report: details, readings table and graph"], xlsx: ["grid", "Excel", ".xlsx with the graph, ready to edit"], csv: ["grid", "CSV", "Plain table: details, results and every reading"] };
+  function askFormat(title, sub, fmts = ["csv", "pdf"], notes = {}) {
     return new Promise((resolve) => {
       const d = makeDialog("formatDialog", `${dlgHead(title, sub)}
         <div class="modal-body"><div class="fmt-pick">
@@ -2752,7 +2843,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         if (ans === "skipAll") break;
       }
     }
-    const fmt = chosen || (await askFormat(title, sub, testPageFormats || undefined));
+    const fmt = chosen || (await askFormat(title, sub));
     if (!fmt) return;
     const sheets = list.map(({ d, m, r }) => { const sh = testSheet(d, m, r);
       sh.details = sheetDetails(sh, r ? { cur: false, d: DEVICES.find((x) => x.name === r.device) || null, m, r } : { cur: true, d, m, start: m.runStart });
@@ -2874,7 +2965,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       document.title = `${m.id} · TractionTherm`;
       $("#mpTitle").textContent = m.id;
       const dl = $("#mpDownload");
-      dl.title = `Download the results of test ${m.testId || ""} on ${m.id} (CSV)`;
+      dl.title = `Download the results of test ${m.testId || ""} on ${m.id} (CSV or PDF)`;
       // every test of this motor (this one and the earlier ones) on the Results page
       const rl = $("#mpResults");
       rl.href = `reports.html?motor=${encodeURIComponent(m.id)}`; rl.title = `All tests of ${m.id} on the Results page`;
@@ -2917,12 +3008,12 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       // real-time: the chosen range at the chosen interval (picker shared with Results and the Device page)
       const rt = rtPoints(m);
       $("#rtSub").textContent = `${rt.label} · scrolls as new readings arrive · hover for values`;
-      lineChart($("#rtChart"), { series: rtSeries(m, rt.pts), lines: runLines(m), unit: "°C", height: 240, title: `${m.id} real-time`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
+      lineChart($("#rtChart"), { series: rtSeries(m, rt.pts), lines: runLines(m), start: rt.from, clockTicks: true, unit: "°C", height: 240, title: `${m.id} real-time`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
       $$("[data-sensor]").forEach((el) => (el.textContent = namesOf(m)[el.dataset.sensor - 1]));
       $("#rtLegend").innerHTML = namesOf(m).map((p, j) => `<span><i style="background:${COLORS[j]}"></i>${p}</span>`).join("") + `<span><i class="dash"></i>Limit</span>`;
       // rate of change over the last minute, per motor sensor
       const back = Math.min(30, m.hist.t.length - 1), span = (m.hist.t[m.hist.t.length - 1] - m.hist.t[m.hist.t.length - 1 - back]) / 60000 || 1;
-      $("#rtStats").innerHTML = (isRunning(m) && d.online ? `<span class="rt-live"><i></i>Live · every ${STEP_MS / 1000} s</span>` : `<span class="muted">Not live · last readings</span>`) +
+      $("#rtStats").innerHTML = 
         MS.map((j) => { const a = m.hist.v[j], r = (a[a.length - 1] - a[a.length - 1 - back]) / span; return `<span>${namesOf(m)[j]} <b class="num">${a[a.length - 1].toFixed(1)} °C</b> <small class="num">${r >= 0 ? "+" : ""}${r.toFixed(2)} °C/min</small></span>`; }).join("") +
         `<span>TA <b class="num">${m.live[AMB].toFixed(1)} °C</b></span>`;
       // same device, same conditions: rise of this motor vs the other motor
@@ -3004,7 +3095,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (d.online) {
         const rt = rtPoints(m);
         $(`#dvRtLbl${c}`).textContent = `${rt.label} · hover for values`;
-        lineChart(chart, { series: rtSeries(m, rt.pts), lines: runLines(m), unit: "°C", height: 200, title: `${m.id} real-time`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
+        lineChart(chart, { series: rtSeries(m, rt.pts), lines: runLines(m), start: rt.from, clockTicks: true, unit: "°C", height: 200, title: `${m.id} real-time`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
       }
       foot.innerHTML = `<span>Rise <b class="num">${e.rise.toFixed(1)} °C</b></span><span>${pairOf(m)} Δ <b class="num">${e.dev.toFixed(1)} °C</b></span>
         <span>${th && th.confident ? `Final ≈ <b class="num">${th.finalTemp.toFixed(1)} °C</b>` : "Final: collecting data…"}</span>
@@ -3260,7 +3351,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         return `<tr class="motor-row" data-row-motor="${id}" tabindex="0" title="${d ? `Open ${id}'s monitoring` : `${id} details (not on a device yet)`}">
           <td class="lead-cell" data-label="Motor"><b class="mono">${id}</b><span class="muted stator-no">Stator No. <span class="mono">${esc(m.stator || "—")}</span></span></td>
           <td data-label="Model / type" class="col-mid"><div class="cell-stack">${esc(m.model)}<span class="muted cell-sub">${typeLabel(m)} · ${pairOf(m)} · ${esc(m.loco)}</span></div></td>
-          <td data-label="Device"><span>${d ? `${esc(d.name)}${isRunning(m) && m.channel ? ` · ${chLabel(m)}` : ""}<span class="muted cell-sub mono">${esc(m.testId || "")}</span>` : `<span class="muted">Not assigned</span>`} <button type="button" class="link-btn" data-assign-motor="${id}">${d ? "Change" : "Assign"}</button></span></td>
+          <td data-label="Device"><span>${d ? `${esc(d.name)}${isRunning(m) && m.channel ? ` · ${chLabel(m)}` : ""}<span class="muted cell-sub mono">${esc(m.testId || "")}</span>` : `<span class="muted">Not assigned</span> <button type="button" class="link-btn" data-assign-motor="${id}">Assign</button>`}</span></td>
           ${PROBES.map((p, j) => `<td data-label="${p} °C" class="num${j === AMB ? " col-opt" : ""} ${live ? tCls(m.live[j], j, m.live[AMB], m) : "muted"}">${live ? m.live[j].toFixed(1) : "—"}</td>`).join("")}
           <td data-label="Predicted final" class="num col-opt">${live && e.th && e.th.confident ? e.th.finalTemp.toFixed(1) + " °C" : "—"}</td>
           <td data-label="Condition">${cond === "none" ? `<span class="verdict-pill off">Not monitored</span>` : cond === "stop" ? statePill(evalMotor(m), true, m) : verdictPill(cond)}</td>
@@ -3403,7 +3494,11 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       const log = f.type.value === "readings";
       $$("option[data-summary-only]", f.ctype).forEach((o) => (o.disabled = log));
       if (f.ctype.selectedOptions[0].disabled) f.ctype.value = "all";
+      // one reading can't be Stable or Unstable (that is judged over the test): readings are checked against the limit
+      f.cond.options[1].text = log ? "Within limit" : "Stable";
+      f.cond.options[2].text = log ? "Above limit" : "Unstable";
     };
+    const LIMIT_TEXT = { ok: "Within limit", crit: "Above limit" };
     const defaults = () => {
       f.type.value = "summary"; f.cond.value = "all"; f.ctype.value = "all"; f.search.value = ""; f.sin.value = "all"; f.range.value = "60"; f.interval.value = String(REC.every);
       f.device.innerHTML = `<option value="all">All devices</option>` + DEVICES.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.id)})</option>`).join("");
@@ -3413,6 +3508,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     // arriving from a motor page: filter to that motor and offer a way back
     const ownerOf = (t) => (everyMotor().find(({ m }) => m.testId === t || (m.tests || []).some((r) => r.testId === t)) || { m: {} }).m.id;
     const askedMotor = q.get("motor") || (q.get("test") && ownerOf(q.get("test")));
+    let backOk = false; // the top "Back to …" link: shown only while no test is open (the test has its own Back to Results)
     if (askedMotor) {
       const x = findMotor(askedMotor);
       if (x) {
@@ -3421,7 +3517,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         f.motor.value = x.m.id;
         // back to where the test was opened from (a motor, its device or another view of Results)
         const back = $("#repBack"), ref = /^(motor|device)\.html\?/.test(PREV_PAGE) ? PREV_PAGE : "";
-        if (back && x.d && !/from=results/.test(PREV_PAGE)) { back.href = ref || `motor.html?motor=${encodeURIComponent(x.m.id)}`; back.textContent = `← Back to ${ref.startsWith("device") ? x.d.name : x.m.id}`; back.hidden = false; }
+        if (back && x.d && !/from=results/.test(PREV_PAGE)) { back.href = ref || `motor.html?motor=${encodeURIComponent(x.m.id)}`; back.textContent = `← Back to ${ref.startsWith("device") ? x.d.name : x.m.id}`; backOk = true; }
       }
     }
 
@@ -3573,11 +3669,11 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
           if (f.cond.value !== "all" && s !== f.cond.value) return;
           if (f.ctype.value !== "all" && (lv[f.ctype.value] || "ok") === "ok") return;
           if (!matches({ motor: m.id, test: tid, device: `${dev} ${devId}`, time: stamp(p.t) })) return;
-          rows.push({ t: p.t, status: s, types: Object.keys(lv).filter((t) => lv[t] !== "ok"), cells: [tid, stamp(p.t), m.id, dev, ch, ...p.v.map((v) => v.toFixed(1)), rise.toFixed(1), spread.toFixed(1), VERDICT_SHORT[s]] });
+          rows.push({ t: p.t, status: s, types: Object.keys(lv).filter((t) => lv[t] !== "ok"), cells: [tid, stamp(p.t), m.id, dev, ch, ...p.v.map((v) => v.toFixed(1)), rise.toFixed(1), spread.toFixed(1), LIMIT_TEXT[s]] });
         });
       });
       rows.sort((a, b) => a.t - b.t || a.cells[2].localeCompare(b.cells[2]));
-      return { title: "Temperature readings", cols: ["Test ID", "Time", "Motor", "Device", "Channel", ...PROBES.map((p) => `${p} °C`), "Max rise °C", `${PAIR} Δ °C`, "Status"], num: Array.from({ length: PROBES.length + 2 }, (_, i) => 5 + i), statusCol: 5 + PROBES.length + 2, motorCol: 2, rows };
+      return { title: "Temperature readings", cols: ["Test ID", "Time", "Motor", "Device", "Channel", ...PROBES.map((p) => `${p} °C`), "Max rise °C", `${PAIR} Δ °C`, "Limit check"], num: Array.from({ length: PROBES.length + 2 }, (_, i) => 5 + i), statusCol: 5 + PROBES.length + 2, motorCol: 2, rows };
     }
     const filterText = () => [
       `Device: ${f.device.selectedOptions[0].text}`, `Motor: ${f.motor.selectedOptions[0].text}`, `Condition: ${f.cond.selectedOptions[0].text}`,
@@ -3597,9 +3693,9 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       const motorsIn = new Set(report.rows.map((r) => r.cells[0])).size;
       $("#repSummary").innerHTML = `
         <div><span>${report.title === "Test results" ? "Tests in report" : "Readings in report"}</span><b class="num">${report.rows.length}${report.title === "Test results" ? "" : `<small> from ${motorsIn} test${motorsIn === 1 ? "" : "s"}</small>`}</b></div>
-        <div><span style="color:var(--ok-text)">${ico("checkCircle")}Stable</span><b class="num">${c.ok}</b></div>
-        <div><span style="color:var(--crit-text)">${ico("xCircle")}Unstable</span><b class="num">${c.crit + c.off}</b></div>
-        ${report.rows.length ? `<div class="cond-split" role="img" aria-label="${c.ok} stable, ${c.crit} unstable">${["ok", "warn", "crit"].filter((k) => c[k]).map((k) => `<span class="${k}" style="flex:${c[k]}" data-tip="${VERDICT_SHORT[k]}|${c[k]} of ${report.rows.length} rows"></span>`).join("")}</div>` : ""}`;
+        <div><span style="color:var(--ok-text)">${ico("checkCircle")}${report.title === "Test results" ? "Stable" : "Within limit"}</span><b class="num">${c.ok}</b></div>
+        <div><span style="color:var(--crit-text)">${ico("xCircle")}${report.title === "Test results" ? "Unstable" : "Above limit"}</span><b class="num">${c.crit + c.off}</b></div>
+        ${report.rows.length ? `<div class="cond-split" role="img" aria-label="${c.ok} stable, ${c.crit} unstable">${["ok", "warn", "crit"].filter((k) => c[k]).map((k) => `<span class="${k}" style="flex:${c[k]}" data-tip="${report.title === "Test results" ? VERDICT_SHORT[k] : LIMIT_TEXT[k] || VERDICT_SHORT[k]}|${c[k]} of ${report.rows.length} rows"></span>`).join("")}</div>` : ""}`;
       // one motor chosen: its details, its tests in order and a download of every test's full report
       const mx = f.motor.value !== "all" && findMotor(f.motor.value);
       const runsOf = mx ? (mx.d ? testRuns(mx.d, mx.m, evalMotor(mx.m)) : mx.m.tests || []) : [];
@@ -3611,9 +3707,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       // one test opened: its own page · no filters, the results table below is its motor's history
       $("#repFilters").hidden = !!shownTest;
       $("#repCsvHist").hidden = !shownTest;
-      testPageFormats = shownTest ? ["csv", "pdf"] : null; // a test's own page: every download asks CSV or PDF first
-      $("#repCsvLabel").textContent = shownTest ? "Download CSV / PDF" : "Download CSV";
-      $("#repPrint").hidden = !!shownTest; // its PDF is offered by the download's format choice
+      $("#repBack").hidden = !backOk || !!shownTest;
       // the test opened from Test history or a Test ID: its graphs, above the filters
       $("#repTestCard").hidden = !shownTest;
       if (mx) testGraphs($("#repTest"), mx.m, runsOf, shownTest);
@@ -3630,16 +3724,16 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       $("#repPrintHead").innerHTML = `<h2>TractionTherm · ${esc(report.title)}</h2><p>Generated ${esc(stamp(Date.now()))} · ${esc(filterText().join(" · "))}</p><p>Test settings: maximum ${hoursText(LIM.AC.maxHours)} · readings ${recLabel()} · Stable when the last ${LIM.AC.settleN} readings each change less than ${LIM.AC.settleDiff} °C within the maximum hours · Unstable above ${LIM.AC.crit} °C or when not settled in time</p>`;
       // on screen each row also gets Download / Edit (not part of the download)
       // the key columns on screen, the result first (State is left out: Results lists completed tests only); the CSV keeps every column
-      const KEY_COLS = ["Test ID", "Motor", "Condition", "Started", "Monitoring for", "Rise °C", "Device", "Model / type"]; // channel shown with the device
+      const KEY_COLS = KEY_COLS_PDF; // channel shown with the device
       const show = report.title === "Test results" ? KEY_COLS.map((c) => report.cols.indexOf(c)).filter((i) => i >= 0) : report.cols.map((c, i) => i);
       const chCol = report.title === "Test results" ? report.cols.indexOf("Channel") : -1, colCls = (i) => (report.cols[i] === "Model / type" ? " col-model" : "");
       $("#repHead").innerHTML = `<tr>${show.map((i) => `<th class="${report.num.includes(i) ? "num" : ""}${colCls(i)}">${esc(chCol >= 0 && report.cols[i] === "Device" ? "Device · channel" : report.cols[i])}</th>`).join("")}<th class="num rep-act-h">Actions</th></tr>`;
       $("#repRows").innerHTML = report.rows.length ? report.rows.map((r) => {
         const id = r.cells[report.motorCol], tid = r.cells[report.cols.indexOf("Test ID")];
-        return `<tr class="${tid ? "rep-row" : ""}${tid && tid === openTest ? " rep-open" : ""}"${tid ? ` title="Open the full details of ${esc(tid)}"` : ""}>${show.map((i) => [chCol >= 0 && report.cols[i] === "Device" && r.cells[chCol] ? `${r.cells[i]} · ${r.cells[chCol]}` : r.cells[i], i]).map(([v, i]) => `<td data-label="${esc(chCol >= 0 && report.cols[i] === "Device" ? "Device · channel" : report.cols[i])}" class="${i === 0 ? "lead-cell" : report.num.includes(i) ? "num" : ""}${colCls(i)}">${i === report.statusCol ? verdictPill(r.status) : i === 0 && v ? testLink(id, v) : i === report.motorCol ? `<span class="mono">${esc(v)}</span>` : esc(v || "—")}</td>`).join("")}
+        return `<tr class="${tid ? "rep-row" : ""}${tid && tid === openTest ? " rep-open" : ""}"${tid ? ` title="Open the full details of ${esc(tid)}"` : ""}>${show.map((i) => [chCol >= 0 && report.cols[i] === "Device" && r.cells[chCol] ? `${r.cells[i]} · ${r.cells[chCol]}` : r.cells[i], i]).map(([v, i]) => `<td data-label="${esc(chCol >= 0 && report.cols[i] === "Device" ? "Device · channel" : report.cols[i])}" class="${i === 0 ? "lead-cell" : report.num.includes(i) ? "num" : ""}${colCls(i)}">${i === report.statusCol ? (report.title === "Test results" ? verdictPill(r.status) : `<span class="badge ${r.status === "crit" ? "crit" : "ok"}">${LIMIT_TEXT[r.status] || esc(v)}</span>`) : i === 0 && v ? testLink(id, v) : i === report.motorCol ? `<span class="mono">${esc(v)}</span>` : esc(v || "—")}</td>`).join("")}
           <td data-label="" class="rep-act"><div class="row-actions">
             ${tid ? `<button type="button" class="btn btn-sm btn-ghost" data-dl-test="${esc(tid)}" data-dl-motor="${esc(id)}" aria-label="Download test ${esc(tid)}" title="Download the results of test ${esc(tid)}">${ico("download")}</button>` : ""}
-            ${tid ? `<button type="button" class="btn btn-sm btn-ghost" data-edit-test="${esc(tid)}" data-dl-motor="${esc(id)}" aria-label="Edit test ${esc(tid)}" title="Edit test ${esc(tid)}">${ico("edit")}</button>` : ""}
+            ${tid ? `<button type="button" class="btn btn-sm btn-ghost" data-edit-test="${esc(tid)}" data-dl-motor="${esc(id)}" aria-label="Edit details of test ${esc(tid)}" title="Edit details of test ${esc(tid)}">${ico("edit")}</button>` : ""}
           </div></td></tr>`;
       }).join("")
         : `<tr><td colspan="${show.length + 1}" class="muted" style="text-align:center;padding:28px">No data matches these filters.</td></tr>`;
@@ -3647,8 +3741,11 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       // the opened test: every detail of its row
       const fr = shownTest && lastFull.get(shownTest);
       $("#repTestDetails").hidden = !fr;
+      // one test: its motor type's terminal names, e.g. "DE (T1) °C" instead of the list's "T1 °C"
+      const savedT = fr && (mx.m.tests || []).find((t) => t.testId === shownTest), NN = fr ? namesOf(savedT && savedT.type ? savedT : mx.m) : [];
+      const own = (c) => c.replace(/\bT([12])\b/g, (_, k) => NN[k - 1]);
       if (fr) $("#repTestDetails").innerHTML = `<h4>Full details · <span class="mono">${esc(shownTest)}</span></h4><dl class="td-grid">${lastCols.map((c, i) =>
-        `<div><dt>${esc(c)}</dt><dd${c === "Condition" ? "" : ' class="num"'}>${c === "Condition" ? verdictPill(fr.status) : esc(fr.cells[i] || "—")}</dd></div>`).join("")}</dl>`;
+        `<div><dt>${esc(own(c))}</dt><dd${c === "Condition" ? "" : ' class="num"'}>${c === "Condition" ? verdictPill(fr.status) : esc(fr.cells[i] || "—")}</dd></div>`).join("")}</dl>`;
       updateAlertCount();
     };
 
@@ -3666,7 +3763,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (cur) { const hp = histPoints(m), t0 = hp.length ? hp[0].t : Infinity; pts = [...m.trend.filter((p) => p.t < t0), ...hp]; }
       else pts = (r.readings || []).map(([t, ...v]) => ({ t, v }));
       const rec = cur ? m : r.type ? r : { type: m.type, termIs: r.termIs }, N = namesOf(rec), live = cur && isRunning(m) && x.d.online;
-      $("#repLiveSub").innerHTML = pts.length ? `${live ? '<span class="rt-live"><i></i>Live</span> · ' : ""}${pts.length} readings from ${esc(repStamp(pts[0].t))} to ${esc(new Date(pts[pts.length - 1].t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))} · on screen only, not in the downloaded report` : "No readings stored for this test";
+      $("#repLiveSub").innerHTML = pts.length ? `${pts.length} readings from ${esc(repStamp(pts[0].t))} to ${esc(new Date(pts[pts.length - 1].t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))} · on screen only, not in the downloaded report` : "No readings stored for this test";
       $("#repLiveLegend").innerHTML = N.map((p, j) => `<span><i style="background:${COLORS[j]}"></i>${p}</span>`).join("") + `<span><i class="dash"></i>Limit</span>`;
       lineChart($("#repLiveChart"), {
         series: N.map((p, j) => ({ name: j === AMB ? "TA · Ambient air" : `${p} · ${probeIs(rec, j)}`, short: p, color: COLORS[j], points: pts.map((pt) => ({ t: pt.t, v: pt.v[j] })) })),
@@ -3681,10 +3778,10 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       $("#repRtSub").textContent = `${rt.label} · hover for values · on screen only, not in the downloaded report`;
       $("#repRtLegend").innerHTML = N.map((p, j) => `<span><i style="background:${COLORS[j]}"></i>${p}</span>`).join("") + `<span><i class="dash"></i>Limit</span>`;
       const back = Math.min(30, m.hist.t.length - 1), n = m.hist.t.length, span = (m.hist.t[n - 1] - m.hist.t[n - 1 - back]) / 60000 || 1;
-      $("#repRtStats").innerHTML = (live ? `<span class="rt-live"><i></i>Live · every ${LIVE_SEC} s</span>` : `<span class="muted">Not live · last readings</span>`) +
+      $("#repRtStats").innerHTML = 
         MS.map((j) => { const a = m.hist.v[j], rate = (a[n - 1] - a[n - 1 - back]) / span; return `<span>${N[j]} <b class="num">${a[n - 1].toFixed(1)} °C</b> <small class="num">${rate >= 0 ? "+" : ""}${rate.toFixed(2)} °C/min</small></span>`; }).join("") +
         `<span>TA <b class="num">${m.live[AMB].toFixed(1)} °C</b></span>`;
-      lineChart($("#repRtChart"), { series: rtSeries(m, rt.pts), lines: runLines(m), unit: "°C", height: 260, title: `${m.id} real-time`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
+      lineChart($("#repRtChart"), { series: rtSeries(m, rt.pts), lines: runLines(m), start: rt.from, clockTicks: true, unit: "°C", height: 260, title: `${m.id} real-time`, note: `one reading ${rt.step}`, xfmt: rt.xfmt });
     }
     setInterval(() => { if (liveSel && !$("#repLive").hidden) drawLive(); }, STEP_MS); // the rest of Results stays a snapshot
     // change log of the opened test: every activity entry that names it, following test ID renames back
@@ -3714,19 +3811,30 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       logActivity("report", `Downloaded ${report.title} CSV — ${report.rows.length} rows · ${filterText().join(" · ")}`);
       toast(`Downloaded ${report.rows.length} rows`);
     };
-    const tablePrint = () => { render(); logActivity("report", `Printed ${report.title} — ${report.rows.length} rows · ${filterText().join(" · ")}`); window.print(); };
-    // the results table: on a test's own page ask CSV or PDF first, elsewhere each button does its own format
-    async function tableDownload(fmt) {
+    // the table as a PDF: the columns shown on screen (plus the reason for test results), every row
+    const tablePdf = () => {
+      if (!report || !report.rows.length) { toast("Nothing to download — change the filters"); return; }
+      const sum = report.title === "Test results", names = sum ? [...KEY_COLS_PDF, "Reason"] : report.cols;
+      const idx = names.map((c) => report.cols.indexOf(c)).filter((i) => i >= 0), sc = idx.indexOf(report.statusCol);
+      const W = { "Test ID": 1.1, Motor: 0.9, Condition: 0.9, Started: 1.4, "Monitoring for": 1, "Rise °C": 0.7, Device: 0.9, "Model / type": 1.8, Reason: 2.4, Time: 1.4, Channel: 0.7, "Limit check": 1 };
+      const title = $("#repTitle").textContent;
+      saveBlob(pdfTableDoc({ title: `TractionTherm · ${title}`, sub: [filterText().join(" · "), `Test settings: maximum ${hoursText(LIM.AC.maxHours)} · readings ${recLabel()} · Stable when the last ${LIM.AC.settleN} readings each change less than ${LIM.AC.settleDiff} °C · Unstable above ${LIM.AC.crit} °C or when not settled in time`],
+        cols: idx.map((i) => ({ h: report.cols[i], w: W[report.cols[i]] || 0.8, right: report.num.includes(i) })),
+        rows: report.rows.map((r) => idx.map((i) => r.cells[i] ?? "")), tone: (row, k) => (k === sc ? (/Unstable|Above/.test(row[k]) ? "crit" : /Stable|Within/.test(row[k]) ? "ok" : null) : null) }),
+        `tractiontherm-${f.type.value}-${fileStamp()}.pdf`);
+      logActivity("report", `Downloaded ${title} PDF — ${report.rows.length} rows · ${filterText().join(" · ")}`);
+      toast(`Downloaded PDF · ${report.rows.length} rows`);
+    };
+    // every download asks CSV or PDF first
+    async function tableDownload() {
       if (!allowed("reports.create")) return;
-      if (testPageFormats) {
-        fmt = await askFormat(`Download ${$("#repTitle").textContent}`, `${report ? report.rows.length : 0} row${report && report.rows.length === 1 ? "" : "s"} · choose the file format`, ["csv", "pdf"], { pdf: "Print-ready table · choose “Save as PDF” in the print window" });
-        if (!fmt) return;
-      }
-      (fmt === "csv" ? tableCsv : tablePrint)();
+      const n = report ? report.rows.length : 0;
+      if (!n) { toast("Nothing to download — change the filters"); return; }
+      const fmt = await askFormat(`Download ${$("#repTitle").textContent}`, `${n} row${n === 1 ? "" : "s"} · the filters shown above apply`, ["csv", "pdf"], { csv: "Every column, for spreadsheets", pdf: "Print-ready table of these rows" });
+      if (fmt) (fmt === "csv" ? tableCsv : tablePdf)();
     }
-    $("#repCsv").addEventListener("click", () => tableDownload("csv"));
-    $("#repCsvHist").addEventListener("click", () => tableDownload("csv"));
-    $("#repPrint").addEventListener("click", () => tableDownload("pdf"));
+    $("#repCsv").addEventListener("click", tableDownload);
+    $("#repCsvHist").addEventListener("click", tableDownload);
     const resetRules = () => { rules = []; f.ruleMode.value = "all"; rulesSig = ""; };
     $("#repReset").addEventListener("click", () => { defaults(); syncCtype(); syncSearch(); resetRules(); render(); });
     // custom rules: the rule controls have no name, so they don't clash with the form's filters
@@ -3979,11 +4087,13 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         <td class="crud-area"><b>${esc(a.label)}</b><small>${esc(Object.values(a.does)[0])}</small></td>
         ${ACTIONS.map(([k, l]) => {
           const key = `${a.key}.${k}`, p = PERMISSIONS.find((x) => x.key === key);
-          if (!p) return `<td class="crud-cell na"><span title="Not used for ${esc(a.label)}">—</span></td>`;
+          if (!p) return `<td class="crud-cell na"><span title="${esc(a.label)} has no ${l} action" aria-label="Not applicable">—</span></td>`;
           const lock = !editable || !!p.locked;
           return `<td class="crud-cell"><label class="perm-check${lock ? " locked" : ""}" title="${esc(a.does[k])}${p.locked ? " · always on" : ""}">
             <input type="checkbox" data-perm="${key}" ${have.includes(key) || p.locked ? "checked" : ""} ${lock ? "disabled" : ""} aria-label="${esc(a.label)} · ${l}: ${esc(a.does[k])}"><span>${ico("check")}</span></label></td>`;
-        }).join("")}</tr>`).join("")}</tbody></table></div>`;
+        }).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="crud-legend muted"><span><b class="crud-na">—</b> Not applicable: that area has no such action (e.g. Results can't be deleted, the Activity log can only be viewed)</span>
+        <span><span class="perm-check locked"><input type="checkbox" checked disabled tabindex="-1" aria-hidden="true"><span>${ico("check")}</span></span> Always on: every role can view the dashboard and live readings</span></p>`;
   }
   // tick rules: Create / Update / Delete bring View with them; removing View clears the rest of the row
   function permGridTick(root, cb) {
@@ -4178,12 +4288,17 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     ["#actSearch", "#actCat", "#actUser", "#actPeriod"].forEach((sel) => $(sel).addEventListener(sel === "#actSearch" ? "input" : "change", () => { shown = PAGE; render(); }));
     $("#actMore").addEventListener("click", () => { shown += PAGE; render(); });
     $("#actReset").addEventListener("click", () => { devOnly = null; showDevOnly(); $("#actSearch").value = ""; $("#actCat").value = ""; $("#actUser").value = ""; $("#actPeriod").value = "all"; shown = PAGE; render(); });
-    $("#actCsv").addEventListener("click", () => {
+    $("#actCsv").addEventListener("click", async () => {
       const list = filtered();
       if (!list.length) { toast("Nothing to download — change the filters"); return; }
-      saveCsv([["Time", "User", "Username", "Role", "Category", "Activity"], ...list.map((e) => [when(e.t), e.user, e.username, e.role, ACT_CATS[e.cat] || e.cat, e.text])], `tractiontherm-activity-${fileStamp()}.csv`);
-      logActivity("report", `Downloaded the activity log CSV — ${list.length} entries`);
-      toast(`Downloaded ${list.length} entries`);
+      const fmt = await askFormat("Download the activity log", `${list.length} entr${list.length === 1 ? "y" : "ies"} · the filters shown apply`, ["csv", "pdf"], { csv: "Every entry, for spreadsheets", pdf: "Print-ready list of these entries" });
+      if (!fmt) return;
+      if (fmt === "csv") saveCsv([["Time", "User", "Username", "Role", "Category", "Activity"], ...list.map((e) => [when(e.t), e.user, e.username, e.role, ACT_CATS[e.cat] || e.cat, e.text])], `tractiontherm-activity-${fileStamp()}.csv`);
+      else saveBlob(pdfTableDoc({ title: "TractionTherm · Activity log", sub: [$("#actCount") ? $("#actCount").textContent : ""],
+        cols: [{ h: "Time", w: 1.2 }, { h: "User", w: 1.1 }, { h: "Role", w: 0.9 }, { h: "Category", w: 0.8 }, { h: "Activity", w: 5 }],
+        rows: list.map((e) => [when(e.t), `${e.user}${e.username ? ` (${e.username})` : ""}`, e.role, ACT_CATS[e.cat] || e.cat, e.text]) }), `tractiontherm-activity-${fileStamp()}.pdf`);
+      logActivity("report", `Downloaded the activity log ${fmt.toUpperCase()} — ${list.length} entries`);
+      toast(`Downloaded ${fmt.toUpperCase()} · ${list.length} entries`);
       render();
     });
     render();
