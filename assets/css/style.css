@@ -549,6 +549,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .alarm-row svg { width: 20px; height: 20px; }
 .alarm-row.crit { background: var(--crit-bg); border-color: color-mix(in srgb, var(--crit) 45%, transparent); }
 .alarm-row.crit svg, .alarm-row.crit em { color: var(--crit-text); }
+.alarm-row.off { background: var(--off-bg); border-color: color-mix(in srgb, var(--off) 45%, transparent); }
+.alarm-row.off svg, .alarm-row.off em { color: var(--off-text); }
+/* short laptop screens: the whole menu, Sign out included, fits without scrolling */
+@media (min-width: 1025px) and (max-height: 860px) { .nav { padding-top: 10px; padding-bottom: 10px; } .nav a { padding-top: 7px; padding-bottom: 7px; } .nav-label { padding-top: 10px; padding-bottom: 4px; } }
 .alarm-row.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .alarm-row.warn svg, .alarm-row.warn em { color: var(--warn-text); }
 .alarm-row b { font-size: 15px; }
@@ -1161,6 +1165,11 @@ svg.ring[width="50"] .ring-track, svg.ring[width="50"] .ring-arc { stroke-width:
 .crud-area b { display: block; font-size: 13px; }
 .crud-area small { display: block; font-size: 11px; color: var(--muted); }
 .crud-cell.na span { color: var(--muted); }
+.crud-legend { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; padding: 12px 20px; font-size: 12px; border-top: 1px solid var(--border); }
+.crud-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.crud-legend .crud-na { width: 24px; text-align: center; font-weight: 400; }
+.crud-legend .perm-check { cursor: default; }
+.crud-legend .perm-check span { width: 20px; height: 20px; }
 #rPerms .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-sm); }
 @media (max-width: 640px) {
   .role-tabs { padding: 12px 16px 0; }
@@ -1417,6 +1426,7 @@ body.anim-in .dq-row { animation: riseIn .45s ease-out both .15s; }
 /* motors table: model / type gives way to Stator No. on laptop widths (still on cards + in View) */
 @media (min-width: 1101px) and (max-width: 1400px) { .motor-table .col-mid { display: none; } }
 .motor-table .stator-no, .motor-table .cell-sub { display: block; font-size: 12px; white-space: nowrap; }
+@media (max-width: 1100px) { .motor-table .cell-sub { white-space: normal; } } /* card view (tablet / phone): the type · terminals · locomotive line wraps inside its card */
 /* tighter cells so every column fits without sideways scrolling */
 @media (min-width: 1101px) {
   .motor-table th, .motor-table td { padding-left: 12px; padding-right: 12px; }
@@ -1822,14 +1832,19 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 
 /* the table under each graph */
 .chart-plot { position: relative; }
-.chart-table { margin-top: 14px; max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.chart-table { margin-top: 14px; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .chart-tbl { font-size: 13px; }
 .chart-tbl th { position: sticky; top: 0; z-index: 1; background: var(--surface); white-space: nowrap; }
 .chart-tbl td.num, .chart-tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .chart-tbl .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .chart-tbl-note { margin: 0; padding: 8px 12px; font-size: 12px; }
-.chart-table .chart-tbl-note { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); }
+@media (max-width: 640px) { .chart-tbl th, .chart-tbl td { padding-left: 8px; padding-right: 8px; } .chart-tbl { font-size: 12px; } .chart-tbl th { white-space: normal; } .chart-tbl th .sw { display: none; } }
+.chart-table .chart-tbl-note { background: var(--surface); border-top: 1px solid var(--border); }
 .rise-tbl .verdict-pill { font-size: 11px; padding: 3px 8px; }
+/* dashboard table: compact and on one line so every column, Condition included, fits a laptop screen */
+.rise-tbl th, .rise-tbl td { padding: 12px 14px; white-space: nowrap; }
+.rise-tbl .cell-sub { display: block; font-size: 11.5px; }
+@media (max-width: 640px) { .rise-tbl th, .rise-tbl td { white-space: normal; padding: 6px 0; } .rise-tbl .cell-sub { display: inline; margin-left: 6px; } }
 .chart-tbl td.tbl-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Download: PDF or Excel */
@@ -1932,8 +1947,10 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 .pager-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .pager-btns .btn { min-width: 34px; justify-content: center; }
 .pager-gap { padding: 0 4px; }
+.pager-size { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
+.pager-size .select-sm { width: auto; height: 30px; padding-top: 0; padding-bottom: 0; font-size: 12.5px; }
 @media print { .table tr.pg-hide { display: table-row !important; } .pager { display: none; } }
-@media (max-width: 640px) { .pager { justify-content: center; } .pager-info { width: 100%; text-align: center; } }
+@media (max-width: 640px) { .pager { justify-content: center; } .pager-info, .pager-size { width: 100%; justify-content: center; text-align: center; margin-left: 0; } }
 /* Results: a whole row opens its test; the opened test's full details */
 .report-table tr.rep-row { cursor: pointer; }
 .report-table tr.rep-row:hover td { background: var(--surface-2); }
@@ -1974,8 +1991,8 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 }
 
 /* Settings: the test settings side by side, one box each (wrap on narrow screens) */
-.set-tiles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; padding: 16px 20px; }
-@media (max-width: 1280px) { .set-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.set-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; padding: 16px 20px; }
+@media (max-width: 1500px) { .set-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .set-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .set-tiles { grid-template-columns: minmax(0, 1fr); } }
 .set-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
@@ -2087,3 +2104,13 @@ a.state-pill:hover .stop-chip, a.state-pill:focus-visible .stop-chip { color: va
 
 /* card layout (phones, tablets, small laptops): the page's 10 cards show in full, no scroll box inside the page (paging already limits them) */
 @media (max-width: 1279px) { .report-card .table-wrap { max-height: none; overflow-y: visible; } }
+
+/* Monitor: live readings of one motor being checked now */
+.mon-live { margin-top: 20px; }
+.mon-live .test-live { border-top: 0; }
+.mon-live .rt-stats { padding: 0; align-items: center; }
+.mon-live-open { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
+.mon-live-open svg { width: 14px; height: 14px; }
+#monLiveMotor { max-width: 260px; min-width: 0; text-overflow: ellipsis; }
+.mon-live .rt-pick, .mon-live .rt-pick-sel { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+@media (max-width: 640px) { .mon-live-open { margin-left: 0; } .mon-live .rt-pick-sel { display: flex; width: 100%; } #monLiveMotor { flex: 1 1 100%; width: 100%; max-width: 100%; } }
