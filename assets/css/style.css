@@ -1870,6 +1870,9 @@ a.ma-row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent);
 .sheet-sum .verdict-pill { font-size: 11px; padding: 3px 8px; }
 .sheet-side .chart-tbl-note { padding: 8px 2px 0; max-width: 420px; }
 .sheet-graph { min-width: 0; }
+/* the readings table's pager stays under it in the first column, never wider than the table */
+.sheet-read { min-width: 0; }
+.sheet-read .pager { width: 0; min-width: 100%; box-sizing: border-box; padding: 10px 2px 0; border-top: 0; justify-content: space-between; }
 .sheet-axis { text-align: center; font-size: 12px; margin-top: 2px; }
 .tg-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 1400px) { .sheet { grid-template-columns: max-content minmax(0, 1fr); } .sheet-graph { grid-column: 1 / -1; } }
