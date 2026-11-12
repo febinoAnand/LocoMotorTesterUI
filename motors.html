@@ -17,6 +17,7 @@
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
+      <a href="display.html"><i data-icon="screen"></i>Demo</a>
       <a href="reports.html"><i data-icon="report"></i>Results</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
@@ -63,7 +64,7 @@
 
       <section class="card card-body">
         <div class="toolbar">
-          <div class="input-icon grow"><i data-icon="search"></i><input class="input" id="motorSearch" type="search" placeholder="Search motor ID, stator no., model or locomotive" aria-label="Search motors"></div>
+          <div class="input-icon grow"><i data-icon="search"></i><input class="input" id="motorSearch" type="search" placeholder="Search stator no., test ID, motor type or device" aria-label="Search motors"></div>
           <select class="select" id="motorDevFilter" aria-label="Filter by device" style="width:auto;min-width:180px"></select>
           <select class="select" id="motorCondFilter" aria-label="Filter by condition" style="width:auto;min-width:160px">
             <option value="all">All conditions</option><option value="ok">Stable</option><option value="warn">Processing</option><option value="crit">Unstable</option><option value="stop">Stopped</option><option value="none">Not monitored</option>
@@ -74,7 +75,7 @@
       <section class="card">
         <div class="table-wrap">
           <table class="table responsive motor-table">
-            <thead><tr><th>Motor / Stator No.</th><th class="col-mid">Model / locomotive</th><th>Device</th><th class="num"><span data-sensor="1">T1</span> °C</th><th class="num"><span data-sensor="2">T2</span> °C</th><th class="num col-opt">TA °C</th><th class="num col-opt">Predicted final</th><th>Condition</th><th>Monitoring</th><th class="num">Actions</th></tr></thead>
+            <thead><tr><th>Stator No.</th><th class="col-mid">Motor type</th><th>Device</th><th class="num"><span data-sensor="1">T1</span> °C</th><th class="num"><span data-sensor="2">T2</span> °C</th><th class="num col-opt">TA °C</th><th class="num col-opt">Predicted final</th><th>Condition</th><th>Monitoring</th><th class="num">Actions</th></tr></thead>
             <tbody id="motorRows" aria-live="polite"></tbody>
           </table>
         </div>
