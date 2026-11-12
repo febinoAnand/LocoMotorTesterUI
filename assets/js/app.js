@@ -39,6 +39,8 @@
     report: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
     bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
+    screen: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     chevronRight: '<path d="m9 18 6-6-6-6"/>',
     chevronLeft: '<path d="m15 18-6-6 6-6"/>',
@@ -243,16 +245,21 @@
     DC: { label: "Conventional motor", names: ["PE (T1)", "CE (T2)"], base: ["PE", "CE"], is: ["Pinion end (PE)", "Commutator end (CE)"] }
   };
   const TYPE_IDS = Object.keys(MOTOR_TYPES);
-  const typeOf = (rec) => (rec && MOTOR_TYPES[rec.type] ? rec.type : "AC");
+  const typeOf = (rec) => (rec && MOTOR_TYPES[rec.type] ? rec.type : "AC"); // type not chosen yet: judged as three-phase (the stricter limit)
+  // a channel switched on without a motor has no type until its details are entered: its sensors are just T1 / T2
+  const typeKnown = (rec) => !!(rec && MOTOR_TYPES[rec.type]);
   // motors saved before types existed: a "DC" in the model makes it a conventional motor
   const guessType = (model) => (/DC/i.test(model || "") ? "DC" : "AC");
-  const typeLabel = (rec) => MOTOR_TYPES[typeOf(rec)].label;
+  const typeLabel = (rec) => (typeKnown(rec) ? MOTOR_TYPES[rec.type].label : "Type not set");
   const typeShort = (rec) => typeLabel(rec).replace(/ motor$/, ""); // "Three-phase" / "Conventional", for "type · model" texts
   // the test settings (Settings page), one set for both motor types:
   //   maxHours   — maximum test hours: Stable must be reached within them
   //   settleN / settleDiff — Stable when the last settleN recorded readings each change less than settleDiff °C on both motor sensors
-  //   crit       — the motor temperature must not exceed this (°C): above it the motor is Unstable at once
-  const DEFAULT_LIMITS = { maxHours: 4, settleN: 5, settleDiff: 0.5, crit: 100 };
+  //   riseAC / riseDC — the temperature limit: the motor temperature must not exceed the ambient temperature at the
+  //                test start + this (°C): three-phase (AC) 35 °C, conventional (DC) 40 °C; above it the motor is Unstable at once
+  //   rateN / rateMax — also for Stable: across the last rateN recorded readings the temperature changes no more than rateMax °C
+  //                (highest − lowest of those readings, on both motor sensors; with 15 min readings, the last hour)
+  const DEFAULT_LIMITS = { maxHours: 4, settleN: 5, settleDiff: 0.5, rateN: 5, rateMax: 1, riseAC: 35, riseDC: 40 };
   const LIMITS_KEY = "tt-limits-v5"; // v5: only the test settings above (v4 had Processing / Unstable pairs per check)
   const LIM = {}, LIM_ONE = { ...DEFAULT_LIMITS };
   TYPE_IDS.forEach((t) => (LIM[t] = LIM_ONE)); // one set for both motor types (the same object: updated in place)
@@ -264,6 +271,24 @@
   loadLimits();
   const hoursText = (h) => (h === 1 ? "1 hour" : `${h} hours`);
   const limitsOf = (rec) => LIM[typeOf(rec)];
+  // the rise allowed over the ambient temperature at the test start, by motor type
+  const riseLimitOf = (rec, type) => LIM_ONE[(type || typeOf(rec)) === "DC" ? "riseDC" : "riseAC"];
+  // the ambient at the start of a test: a motor's current test (its first reading), or a saved test (its first stored reading)
+  const startAmbOf = (rec) => {
+    if (rec && rec.trend && rec.runStart) {
+      // the first minute point of the test, else its first 2 s sample (a test just switched on has no minute point yet)
+      const p = rec.trend.find((x) => x.t >= rec.runStart - 1000) || (rec.hist ? histPoints(rec, rec.runStart)[0] : null);
+      return p ? p.v[AMB] : rec.live ? rec.live[AMB] : null;
+    }
+    if (rec && rec.readings && rec.readings.length) return rec.readings[0][3];
+    return rec && rec.live ? rec.live[AMB] : null;
+  };
+  // the temperature limit of a test (°C): ambient at its start + the type's rise. Infinity while the start ambient is unknown, so nothing trips
+  const tempLimitOf = (rec, type) => { const a = startAmbOf(rec); return a == null ? Infinity : +(a + riseLimitOf(rec, type)).toFixed(1); };
+  // "66.8 °C · ambient at start 31.8 + 35" — the limit as words
+  const limitWords = (rec, type) => { const a = startAmbOf(rec), n = riseLimitOf(rec, type); return a == null ? `ambient at the test start + ${n} °C` : `${(a + n).toFixed(1)} °C · ambient at start ${a.toFixed(1)} + ${n}`; };
+  // both types in one phrase, for settings and notes
+  const riseRuleText = () => `the ambient at the test start + ${LIM_ONE.riseAC} °C (three-phase) / + ${LIM_ONE.riseDC} °C (conventional)`;
   const saveLimits = () => store.set(LIMITS_KEY, LIM.AC);
   // recording interval (Settings): how often a reading is recorded in the results and downloads, in minutes.
   // The live readings, the checks and the heating model keep using every sample.
@@ -289,12 +314,12 @@
   const PROBES = [T1N, T2N, "TA"];
   const PROBE_NAME = { [T1N]: TYPE_IDS.map((t) => MOTOR_TYPES[t].base[0]).join(" / "), [T2N]: TYPE_IDS.map((t) => MOTOR_TYPES[t].base[1]).join(" / "), TA: "Ambient air" };
   // the sensor names of one motor or test: [DE, NDE, TA] or [PE, CE, TA]
-  const namesOf = (rec) => [...MOTOR_TYPES[typeOf(rec)].names, "TA"];
+  const namesOf = (rec) => [...(typeKnown(rec) ? MOTOR_TYPES[rec.type].names : ["T1", "T2"]), "TA"];
   const pairOf = (rec) => namesOf(rec).slice(0, 2).join(" / ");
   // what a terminal measures in one test (rec: a motor's current test or a saved one): set in Edit details, else from the motor type
-  const probeIs = (rec, j) => (j === 2 ? PROBE_NAME.TA : ((rec && rec.termIs) || {})[j ? "t2" : "t1"] || MOTOR_TYPES[typeOf(rec)].is[j]);
+  const probeIs = (rec, j) => (j === 2 ? PROBE_NAME.TA : ((rec && rec.termIs) || {})[j ? "t2" : "t1"] || (typeKnown(rec) ? MOTOR_TYPES[rec.type].is[j] : `Terminal ${j + 1}`));
   // what a terminal can measure: the measuring points of the motor type (plus a value saved earlier that isn't one of them)
-  const termOptions = (type, keep) => [...new Set([...MOTOR_TYPES[type].is, keep].filter(Boolean))];
+  const termOptions = (type, keep) => [...new Set([...(MOTOR_TYPES[type] ? MOTOR_TYPES[type].is : ["Terminal 1", "Terminal 2"]), keep].filter(Boolean))];
   const termOptionsHtml = (type, sel) => termOptions(type, sel).map((o) => `<option${o === sel ? " selected" : ""}>${esc(o)}</option>`).join("");
   const termSame = (t1, t2) => t1 === t2 && "The two terminals can't measure the same point · pick a different one for each.";
   const AMB = PROBES.length - 1;                    // index of the ambient probe (TA)
@@ -302,11 +327,15 @@
   const hotOf = (v) => Math.max(...v.slice(0, AMB));
   const spreadOf = (v) => hotOf(v) - Math.min(...v.slice(0, AMB));
   // a test's readings recorded every REC.every min, and whether the last settleN of them each changed by less than settleDiff °C
+  // Stable needs both: each of the last settleN readings changes less than settleDiff from the one before, and across the
+  // last rateN readings the highest minus the lowest is no more than rateMax — on both motor sensors
   function settleOf(pts, start, rec, L = limitsOf(rec)) {
-    const rows = recorded(pts, start), n = L.settleN;
-    if (rows.length < n + 1) return { ok: false, have: Math.max(0, rows.length - 1), need: n, maxd: null };
-    const maxd = Math.max(...rows.slice(-n - 1).flatMap((r, i, a) => (i ? MS.map((j) => Math.abs(r.v[j] - a[i - 1].v[j])) : [])));
-    return { ok: maxd < L.settleDiff, have: n, need: n, maxd };
+    const rows = recorded(pts, start), n = L.settleN, rn = L.rateN;
+    const stepOk = rows.length >= n + 1, rateHave = rows.length >= rn;
+    const maxd = stepOk ? Math.max(...rows.slice(-n - 1).flatMap((r, i, a) => (i ? MS.map((j) => Math.abs(r.v[j] - a[i - 1].v[j])) : []))) : null;
+    const win = rows.slice(-rn), rated = rateHave ? Math.max(...MS.map((j) => { const v = win.map((x) => x.v[j]); return Math.max(...v) - Math.min(...v); })) : null;
+    const steps = maxd != null && maxd < L.settleDiff, rate = rated != null && rated <= L.rateMax;
+    return { ok: steps && rate, steps, rate, have: Math.max(0, rows.length - 1), need: n, maxd, rated, rateN: rn, rateHave: Math.min(rows.length, rn) };
   }
   // real-time interval (Settings): how often each device sends its readings, in seconds; live values, real-time graphs
   // and alarms update at this rate. The page's timers start at it, so a change reloads open pages.
@@ -507,7 +536,7 @@
         const tEq = (A - r0) > 0 ? tau * Math.log((60 * (A - r0)) / (EQ_RATE * tau)) : 0;
         out.eqIn = Math.max(0, tEq - tNow);
         // time at which the probe would pass the temperature limit (as a rise above today's ambient)
-        const rc = limitsOf(m).crit - amb;
+        const rc = tempLimitOf(m) - amb;
         out.alarmIn = now >= rc ? 0 : A > rc && A > r0 ? Math.max(0, tau * Math.log((A - r0) / (A - rc)) - tNow) : null;
       }
       return out;
@@ -558,18 +587,22 @@
     const peak = Math.max(hot, ...pts.map((p) => hotOf(p.v)));
     // settled within the maximum hours: only the readings up to the maximum count
     const inTime = m.runStart ? pts.filter((p) => p.t <= m.runStart + maxMin * 60000 + 1000) : pts;
-    const st = m.trend ? settleOf(inTime, m.runStart, m, L) : { ok: false, have: 0, need: L.settleN, maxd: null };
+    const st = m.trend ? settleOf(inTime, m.runStart, m, L) : { ok: false, steps: false, rate: false, have: 0, need: L.settleN, maxd: null, rated: null, rateN: L.rateN, rateHave: 0 };
+    // ambient at the test start: TA of the first reading of this test
+    const amb0 = startAmbOf(m) ?? amb, riseMax = riseLimitOf(m), riseAt = amb0 + riseMax; // same start ambient as the graph's limit line
     const checks = [
-      { t: "temp", k: "Motor temperature", d: `Hotter of ${PR} · must not exceed ${L.crit} °C at any time`,
-        v: `${hot.toFixed(1)} °C${peak > hot + 0.05 ? ` · highest ${peak.toFixed(1)} °C` : ""}${peak > L.crit ? ` (above ${L.crit} °C)` : ""}`, s: peak > L.crit ? "crit" : "ok" },
-      { t: "settle", k: st.ok ? "Temperature settled" : "Not settled yet", d: `Stable when the last ${L.settleN} readings (${recLabel()}) each change less than ${L.settleDiff} °C on ${PR}`,
-        v: st.maxd == null ? `${st.have} of ${st.need} readings` : `largest change ${st.maxd.toFixed(1)} °C${st.ok ? "" : ` (needs < ${L.settleDiff} °C)`}`, s: st.ok ? "ok" : "warn", settle: true },
+      { t: "temp", k: "Motor temperature", d: `Hotter of ${PR} · must not exceed the ambient at the test start + ${riseMax} °C (${typeShort(m)})`,
+        v: `${hot.toFixed(1)} °C${peak > hot + 0.05 ? ` · highest ${peak.toFixed(1)} °C` : ""} · limit ${amb0.toFixed(1)} + ${riseMax} = ${riseAt.toFixed(1)} °C${peak > riseAt ? " (above)" : ""}`, s: peak > riseAt ? "crit" : "ok" },
+      { t: "settle", k: st.steps ? "Readings settled" : "Not settled yet", d: `Stable when the last ${L.settleN} readings (${recLabel()}) each change less than ${L.settleDiff} °C on ${PR}`,
+        v: st.maxd == null ? `${Math.min(st.have, st.need)} of ${st.need} readings` : `largest change ${st.maxd.toFixed(1)} °C${st.steps ? "" : ` (needs < ${L.settleDiff} °C)`}`, s: st.steps ? "ok" : "warn", settle: true },
+      { t: "rate", k: `Max − min of the last ${L.rateN} readings`, d: `Stable when, over the last ${L.rateN} readings, the highest minus the lowest of ${PR} is no more than ${L.rateMax} °C`,
+        v: st.rated == null ? `${st.rateHave} of ${L.rateN} readings` : `${st.rated.toFixed(1)} °C${st.rate ? "" : ` (needs ≤ ${L.rateMax} °C)`}`, s: st.rate ? "ok" : "warn", settle: true },
       { t: "hours", k: over ? "Maximum test hours exceeded" : stopped && !st.ok ? "Stopped before settling" : "Test time", d: `Stable must be reached within ${hoursText(L.maxHours)}`,
         v: `${fmtRun(runMin)} of ${hoursText(L.maxHours)}${(over || stopped) && !st.ok ? " · not settled in time" : ""}`, s: (over || stopped) && !st.ok ? "crit" : "ok" }
     ];
     // Stable (settled in time) wins over "not settled"; Unstable wins over both
     const status = checks.some((c) => c.s === "crit") ? "crit" : st.ok ? "ok" : "warn";
-    return { hot, amb, rise, dev, th, settle: st, stable: st.ok, over, peak, runMin, maxMin, checks, status: m.active === false ? "stop" : status, condition: status };
+    return { hot, amb, amb0, riseAt, rise, dev, th, settle: st, stable: st.ok, over, peak, runMin, maxMin, checks, status: m.active === false ? "stop" : status, condition: status };
   }
   const finalResult = (res) => (res === "ok" ? "ok" : "crit");
   const allMotors = () => DEVICES.flatMap((d) => d.motors.map((m) => ({ d, m })));
@@ -583,12 +616,17 @@
   const SPARE_KEY = "tt-spare-v1";
   let SPARE = store.get(SPARE_KEY, null) || JSON.parse(JSON.stringify(DEFAULT_SPARE));
   const saveSpare = () => store.set(SPARE_KEY, SPARE.map(({ id, stator, type, model, loco, tests }) => ({ id, stator, type, model, loco, tests: tests || [] })));
-  const spareOf = (m) => ({ id: m.id, stator: m.stator, type: typeOf(m), model: m.model, loco: m.loco, tests: m.tests || [] });
+  const spareOf = (m) => ({ id: m.id, stator: m.stator, type: typeOf(m), tests: m.tests || [] });
   // motors saved before the stator number existed: take it from the sample data when the ID matches
   const DEFAULT_STATOR = Object.fromEntries([...DEFAULT_DEVICES.flatMap((d) => d.motors), ...DEFAULT_SPARE].map((m) => [m.id, m.stator]));
   [...DEVICES.flatMap((d) => d.motors), ...SPARE].forEach((m) => { if (!m.stator && DEFAULT_STATOR[m.id]) m.stator = DEFAULT_STATOR[m.id]; });
   // motors saved before motor types existed
-  [...DEVICES.flatMap((d) => d.motors), ...SPARE].forEach((m) => { if (!MOTOR_TYPES[m.type]) m.type = m.untitled ? "AC" : guessType(m.model); });
+  [...DEVICES.flatMap((d) => d.motors), ...SPARE].forEach((m) => { if (!MOTOR_TYPES[m.type] && !m.untitled) m.type = guessType(m.model); });
+  // the Stator No. is the motor's ID: a motor saved with a separate Motor ID (TM-4471) takes its stator number (ST-60681); its tests come along
+  const statorIds = () => [...DEVICES.flatMap((d) => d.motors), ...SPARE].forEach((m) => { if (!m.untitled && m.stator && m.id !== m.stator) m.id = m.stator; });
+  statorIds();
+  // a channel switched on without a motor has no type until its details are entered (earlier versions asked the type at switch-on: forget it)
+  [...DEVICES.flatMap((d) => d.motors), ...SPARE].forEach((m) => { if (m.untitled && m.type) { delete m.type; delete m.typeSet; } });
   // motors saved while devices still had a queue go back to the not-assigned list
   if (DEVICES.some((d) => d.motors.some((m) => m.queued))) {
     DEVICES.forEach((d) => {
@@ -633,7 +671,8 @@
     const used = new Set(everyMotor().flatMap(({ m }) => [m.testId, ...(m.tests || []).map((t) => t.testId)]).filter(Boolean));
     let added = 0;
     everyMotor().forEach(({ m }) => {
-      (HISTORY_SEED[m.id] || []).forEach((r) => {
+      // the demo history is listed by the old Motor IDs: find a motor by that ID or by its stator number (now its ID)
+      (HISTORY_SEED[m.id] || HISTORY_SEED[Object.keys(DEFAULT_STATOR).find((k) => DEFAULT_STATOR[k] === m.id)] || []).forEach((r) => {
         if (used.has(r.testId)) return;
         const t = { ...r, type: typeOf(m) };
         t.readings = sampleReadings(t); delete t.curveTau;
@@ -679,10 +718,50 @@
     filledTests = true;
   });
   if (filledTests) saveDevices(); // saved once, so the IDs stay the same on every page
-  const testIdField = (id, value) => `<div class="field"><label for="${id}">Test ID</label><input class="input mono" id="${id}" name="testId" value="${esc(value)}" maxlength="24" autocomplete="off" required><span class="hint">Pre-filled with the next free number · change it if your test has its own ID</span></div>`;
+  // the Test ID is given by the app and can't be changed while adding or editing motor details
+  const testIdField = (id, value) => `<div class="field"><label for="${id}">Test ID</label><input class="input mono" id="${id}" name="testId" value="${esc(value)}" maxlength="24" autocomplete="off" readonly aria-readonly="true" title="Given automatically · can't be changed"><span class="hint">Given automatically · can't be changed</span></div>`;
   const findMotor = (id) => everyMotor().find((x) => x.m.id === id) || null;
+  // who started a test: picked from the users (the person who switched it on, by default)
+  const me = () => (currentUser() || {}).name || "";
+  const starterNames = (keep) => [...new Set([...USERS.filter((u) => u.active).map((u) => u.name), keep].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  // the typed text as one of the users' names (any case), or "" if it isn't one
+  const starterOf = (v, keep) => { const t = String(v || "").trim().toLowerCase(); return starterNames(keep).find((n) => n.toLowerCase() === t) || ""; };
+  const startedByField = (id, value) => `<div class="field by-combo"><label for="${id}">Started by</label>
+      <div class="by-box"><input class="input" id="${id}" name="startedBy" value="${esc(value || "")}" data-keep="${esc(value || "")}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}-list" placeholder="Type a name, e.g. ar">
+        <ul class="by-list" id="${id}-list" role="listbox" hidden></ul></div>
+      <span class="hint">Type one or two letters and pick the person who started this test</span></div>`;
+  // the list under a Started by box: the users whose name contains what was typed (all of them when it is empty)
+  function byList(inp, show = true) {
+    const ul = inp.parentElement.querySelector(".by-list"), t = inp.value.trim().toLowerCase();
+    const hits = starterNames(inp.dataset.keep).filter((n) => !t || n.toLowerCase().includes(t));
+    const mark = (n) => { const k = t ? n.toLowerCase().indexOf(t) : -1; return k < 0 ? esc(n) : `${esc(n.slice(0, k))}<b>${esc(n.slice(k, k + t.length))}</b>${esc(n.slice(k + t.length))}`; };
+    ul.innerHTML = hits.length ? hits.map((n, k) => `<li role="option" data-name="${esc(n)}"${k === 0 ? ' class="on"' : ""}>${mark(n)}</li>`).join("") : `<li class="none">No user matches “${esc(inp.value.trim())}”</li>`;
+    ul.hidden = !show; inp.setAttribute("aria-expanded", String(show));
+    // not enough room under the box (the last field of a window): open the list upwards
+    // the list opens where there is more room (above for the last field of a window) and never runs past the window: it scrolls instead
+    if (show) { ul.classList.remove("up"); ul.style.maxHeight = "";
+      const area = (inp.closest(".modal-body") || document.documentElement).getBoundingClientRect(), b = inp.getBoundingClientRect();
+      const below = area.bottom - b.bottom - 8, above = b.top - area.top - 8, up = below < ul.offsetHeight && above > below;
+      ul.classList.toggle("up", up); ul.style.maxHeight = `${Math.max(76, Math.min(210, up ? above : below))}px`; }
+  }
+  const byPick = (inp, name) => { inp.value = name; byList(inp, false); inp.dispatchEvent(new Event("input", { bubbles: true })); };
+  document.addEventListener("focusin", (e) => { if (e.target.matches(".by-combo input")) byList(e.target); });
+  document.addEventListener("input", (e) => { if (e.target.matches(".by-combo input") && !e.target._picking) byList(e.target); });
+  document.addEventListener("keydown", (e) => {
+    const inp = e.target.closest && e.target.closest(".by-combo input"); if (!inp) return;
+    const ul = inp.parentElement.querySelector(".by-list"), items = [...ul.querySelectorAll("li[data-name]")], on = items.findIndex((li) => li.classList.contains("on"));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (ul.hidden) return byList(inp); if (!items.length) return;
+      const k = (on + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; items.forEach((li, x) => li.classList.toggle("on", x === k)); items[k].scrollIntoView({ block: "nearest" }); }
+    else if (e.key === "Enter" && !ul.hidden && items[on]) { e.preventDefault(); inp._picking = true; byPick(inp, items[on].dataset.name); inp._picking = false; }
+    else if (e.key === "Escape" && !ul.hidden) { e.preventDefault(); e.stopPropagation(); byList(inp, false); }
+  }, true);
+  document.addEventListener("mousedown", (e) => {
+    const li = e.target.closest(".by-list li[data-name]");
+    if (li) { e.preventDefault(); const inp = li.closest(".by-box").querySelector("input"); inp._picking = true; byPick(inp, li.dataset.name); inp._picking = false; return; }
+    $$(".by-combo input").forEach((inp) => { if (!inp.parentElement.contains(e.target)) byList(inp, false); });
+  });
   // a motor sensor above the temperature limit shows red
-  const tCls = (v, j, amb, rec) => (j !== AMB && v > limitsOf(rec).crit ? "t-crit" : "");
+  const tCls = (v, j, amb, rec) => (j !== AMB && v > tempLimitOf(rec) ? "t-crit" : "");
 
   const STATUS = {
     ok: { label: "Stable", icon: "checkCircle" },
@@ -797,48 +876,45 @@
     const target = !editing && preset.device ? DEVICES.find((x) => x.id === preset.device) || null : null;
     const d = makeDialog("motorDialog", `
       <form id="motorForm" novalidate style="display:contents">
-        ${dlgHead(fresh ? "Add motor details" : editing ? `Edit motor ${editing.id}` : "Add motor", fresh ? `Readings are already being recorded under ${editing.id}${cur.d ? ` on ${cur.d.name} ${chLabel(editing)}` : ""} · they stay with the motor.` : editing ? "Update the motor details." : "Register a traction motor with its stator number.")}
+        ${dlgHead(fresh ? "Add motor details" : editing ? `Edit motor ${editing.id}` : "Add motor", fresh ? `Readings are already being recorded under ${editing.id}${cur.d ? ` on ${cur.d.name} ${chLabel(editing)}` : ""} · they stay with the motor.` : editing ? "Update the motor details." : "Register a traction motor by its Stator No. and type · the Stator No. is its ID.")}
         <div class="modal-body">
           <div class="form-error" id="mfError" role="alert"></div>
           <div class="form-grid">
-            <div class="field"><label for="mf-id">Motor ID</label><input class="input mono" id="mf-id" name="id" placeholder="TM-0001" required autofocus></div>
-            <div class="field"><label for="mf-stator">Stator No.</label><input class="input mono" id="mf-stator" name="stator" placeholder="ST-00001" required autocomplete="off"></div>
-            <div class="field"><label for="mf-model">Model / type</label><input class="input" id="mf-model" name="model" placeholder="3-phase AC traction motor"></div>
-            <div class="field"><label for="mf-loco">Locomotive</label><input class="input" id="mf-loco" name="loco" placeholder="WAG-9 #31245"></div>
-            <div class="field"><label for="mf-type">Motor type</label><select class="select" id="mf-type" name="type">${TYPE_IDS.map((t) => `<option value="${t}">${MOTOR_TYPES[t].label} · sensors ${MOTOR_TYPES[t].names.join(" / ")}</option>`).join("")}</select></div>
+            <div class="field"><label for="mf-stator">Stator No.</label><input class="input mono" id="mf-stator" name="stator" placeholder="ST-00001" required autocomplete="off" autofocus></div>
+            <div class="field"><label for="mf-type">Motor type</label><select class="select" id="mf-type" name="type">${editing && !typeKnown(editing) ? `<option value="" selected disabled>Choose the motor type</option>` : ""}${TYPE_IDS.map((t) => `<option value="${t}">${MOTOR_TYPES[t].label} · sensors ${MOTOR_TYPES[t].names.join(" / ")}</option>`).join("")}</select></div>
           </div>
-          ${target || fresh ? `<div class="form-grid" style="margin-top:14px">${testIdField("mf-test", fresh ? preset.testId || editing.testId : nextTestId())}</div>` : ""}
+          ${target || fresh ? `<div class="form-grid" style="margin-top:14px">${testIdField("mf-test", fresh ? preset.testId || editing.testId : nextTestId())}${fresh ? startedByField("mf-by", preset.startedBy || editing.startedBy || me()) : ""}</div>` : ""}
           ${target ? `<p class="form-note">${ico("cpu")}Will be assigned to <b>${esc(target.name)}</b> and checked straight away on CH ${freeChannel(target)}.</p>` : ""}
         </div>
         <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">${fresh ? "Save details" : editing ? "Save changes" : "Add motor"}</button></div>
       </form>`);
     const f = d.querySelector("#motorForm"), err = d.querySelector("#mfError");
     const clean = (v) => (v === "—" ? "" : v || "");
-    if (editing) { f.elements.id.value = fresh ? "" : editing.id; f.elements.stator.value = clean(editing.stator); f.elements.model.value = clean(editing.model); f.elements.loco.value = clean(editing.loco); f.elements.type.value = typeOf(editing); }
+    if (editing) { f.elements.stator.value = clean(editing.stator); if (typeKnown(editing)) f.elements.type.value = editing.type; }
     f.addEventListener("submit", (e) => {
       e.preventDefault();
-      const id = f.elements.id.value.trim().toUpperCase(), stator = f.elements.stator.value.trim().toUpperCase();
+      const stator = f.elements.stator.value.trim().toUpperCase(), id = stator; // the Stator No. is the motor's ID
       const fail = (msg) => { err.textContent = msg; err.classList.add("show"); };
-      if (!id) return fail("Motor ID is required.");
       if (!stator) return fail("Stator No. is required.");
-      if (everyMotor().some(({ m }) => m.id.toUpperCase() === id && m !== editing)) return fail(`Motor ${id} already exists.`);
-      const other = everyMotor().find(({ m }) => (m.stator || "").toUpperCase() === stator && m !== editing);
-      if (other) return fail(`Stator No. ${stator} is already registered to ${other.m.id}.`);
+      if (!/^[A-Z0-9][A-Z0-9/#.-]{1,29}$/.test(stator)) return fail("Stator No.: 2–30 letters, numbers, dashes or slashes.");
+      if (everyMotor().some(({ m }) => m !== editing && (m.id.toUpperCase() === stator || (m.stator || "").toUpperCase() === stator))) return fail(`Stator No. ${stator} is already registered.`);
       const tid = target || fresh ? checkTestId(f.elements.testId.value, fresh ? editing : null) : {};
       if (tid.err) return fail(tid.err);
       if (target && !freeChannel(target)) return fail(`Both channels on ${target.name} are in use — switch one off first.`);
-      const info = { id, stator, type: f.elements.type.value, model: f.elements.model.value.trim() || "—", loco: f.elements.loco.value.trim() || "—" };
-      const LBL = { id: "ID", stator: "stator no.", type: "type", model: "model", loco: "locomotive" };
-      const changes = editing ? Object.keys(LBL).filter((k) => (editing[k] || "—") !== info[k]).map((k) => `${LBL[k]} ${editing[k] || "—"} → ${info[k]}`) : [];
+      if (!f.elements.type.value) return fail("Choose the motor type: three-phase (DE / NDE) or conventional (PE / CE).");
+      if (fresh && !starterOf(f.elements.startedBy.value, editing.startedBy)) return fail("Started by: pick a user from the list.");
+      const info = { id, stator, type: f.elements.type.value };
+      const LBL = { stator: "stator no.", type: "type" };
+      const changes = editing ? Object.keys(LBL).filter((k) => (editing[k] || "—") !== info[k]).map((k) => `${LBL[k]} ${k === "type" && MOTOR_TYPES[editing[k]] ? MOTOR_TYPES[editing[k]].label : editing[k] || "—"} → ${k === "type" ? MOTOR_TYPES[info[k]].label : info[k]}`) : [];
       const oldId = editing && editing.id;
-      if (editing) { Object.assign(editing, info, { typeSet: true }, fresh ? { testId: useTestId(tid.t) } : {}); delete editing.untitled; }
+      if (editing) { Object.assign(editing, info, { typeSet: true }, fresh ? { testId: useTestId(tid.t), startedBy: starterOf(f.elements.startedBy.value, editing.startedBy) } : {}); delete editing.untitled; }
       else attachMotor({ ...info }, target, tid.t);
       saveDevices(); saveSpare();
       d.close();
       const mm = target && target.motors.find((x) => x.id === id);
-      logActivity(target ? "test" : "motor", fresh ? `Added details for ${oldId} — now motor ${id} (stator ${stator}) · test ${editing.testId || "—"}`
+      logActivity(target ? "test" : "motor", fresh ? `Added details for ${oldId} — now motor ${id} (${MOTOR_TYPES[info.type].label}) · test ${editing.testId || "—"} · started by ${editing.startedBy}`
         : editing ? `Edited motor ${id}${changes.length ? ` — ${changes.join(", ")}` : " — no changes"}`
-        : target ? `Registered motor ${id} (stator ${stator}) and assigned it to ${target.name} for test ${tid.t} · checking started on ${chLabel(mm)}` : `Registered motor ${id} (stator ${stator}) · not assigned`);
+        : target ? `Registered motor ${id} (${MOTOR_TYPES[info.type].label}) and assigned it to ${target.name} for test ${tid.t} · checking started on ${chLabel(mm)}` : `Registered motor ${id} (${MOTOR_TYPES[info.type].label}) · not assigned`);
       toast(fresh ? `Details saved · now ${id}` : editing ? `${id} updated` : target ? `${id} added to ${target.name} · ${tid.t} · checking now` :`${id} registered — assign it to a device to start checking`);
       // the motor page is addressed by motor ID: follow a renamed motor there
       if (oldId && oldId !== id && document.body.dataset.page === "motor") { const from = new URLSearchParams(location.search).get("from");
@@ -848,7 +924,7 @@
     d.showModal();
   }
   // a motor switched on under the wrong channel: move it, or swap with the motor on the other one. Readings stay with each motor
-  const channelBtn = (m, d) => (d && d.online && isRunning(m) && m.channel ? `<button type="button" class="ch-edit" data-channel="${esc(m.id)}" aria-label="Change the channel of ${esc(m.id)}" title="Change channel">${ico("edit")}</button>` : "");
+  const channelBtn = () => ""; // Change channel removed: a motor stays on the channel it was switched on
   function channelDialog(id) {
     if (!allowed("monitoring.update")) return;
     const x = findMotor(id); if (!x || !x.d || !isRunning(x.m)) return;
@@ -960,21 +1036,19 @@
           <div class="form-error" id="teError" role="alert"></div>
           <h4 class="te-h">Test <small>can't be edited</small></h4>
           <dl class="te-fixed"><div><dt>Test ID</dt><dd class="mono">${esc(testId)}</dd></div><div><dt>Device</dt><dd>${esc(devNow || "—")}</dd></div><div><dt>Channel</dt><dd>${chNow ? `CH ${chNow}` : "—"}</dd></div></dl>
+          <div class="form-grid te-by">${startedByField("te-by", rec.startedBy || "")}</div>
           <h4 class="te-h">Terminals</h4>
           <div class="form-grid">
-            <div class="field"><label for="te-t1">${namesOf(m)[0]} measures</label><select class="select" id="te-t1" name="t1Is">${termOptionsHtml(typeOf(m), isOf(0))}</select></div>
-            <div class="field"><label for="te-t2">${namesOf(m)[1]} measures</label><select class="select" id="te-t2" name="t2Is">${termOptionsHtml(typeOf(m), isOf(1))}</select></div>
+            <div class="field"><label for="te-t1">${namesOf(m)[0]} measures</label><select class="select" id="te-t1" name="t1Is">${termOptionsHtml(typeKnown(m) ? m.type : "", isOf(0))}</select></div>
+            <div class="field"><label for="te-t2">${namesOf(m)[1]} measures</label><select class="select" id="te-t2" name="t2Is">${termOptionsHtml(typeKnown(m) ? m.type : "", isOf(1))}</select></div>
           </div>
           ${done ? "" : `<label class="te-swap"><input type="checkbox" name="swap"><span>${namesOf(m).slice(0, 2).join(" and ")} were connected the wrong way round · swap their readings in this test</span></label>`}
           ${vibEdit ? `<h4 class="te-h">Vibration <small>SKF readings · leave a side blank if it wasn't measured</small></h4>${vibSides({ type: m.type, termIs: rec.termIs }, rec.vib, namesOf(m))}`
             : can("monitoring.update") ? `<h4 class="te-h">Vibration <small>can be entered once the test is stopped</small></h4>` : ""}
           <h4 class="te-h">Motor <small>changes on all tests of this motor</small></h4>
           <div class="form-grid">
-            <div class="field"><label for="te-id">Motor ID</label><input class="input mono" id="te-id" name="id" placeholder="TM-0001" required></div>
             <div class="field"><label for="te-stator">Stator No.</label><input class="input mono" id="te-stator" name="stator" placeholder="ST-00001" required autocomplete="off"></div>
-            <div class="field"><label for="te-model">Model / type</label><input class="input" id="te-model" name="model" placeholder="3-phase AC traction motor"></div>
-            <div class="field"><label for="te-loco">Locomotive</label><input class="input" id="te-loco" name="loco" placeholder="WAG-9 #31245"></div>
-            <div class="field"><label for="te-type">Motor type</label><select class="select" id="te-type" name="type">${TYPE_IDS.map((t) => `<option value="${t}">${MOTOR_TYPES[t].label} · sensors ${MOTOR_TYPES[t].names.join(" / ")}</option>`).join("")}</select></div>
+            <div class="field"><label for="te-type">Motor type</label><select class="select" id="te-type" name="type">${typeKnown(m) ? "" : `<option value="" selected disabled>Choose the motor type</option>`}${TYPE_IDS.map((t) => `<option value="${t}">${MOTOR_TYPES[t].label} · sensors ${MOTOR_TYPES[t].names.join(" / ")}</option>`).join("")}</select></div>
           </div>
         </div>
         <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save details</button></div>
@@ -985,17 +1059,15 @@
       const i = [...s.options].map((o) => o.value).indexOf(s.value), opts = MOTOR_TYPES[el.type.value].is;
       s.innerHTML = termOptionsHtml(el.type.value, i >= 0 && i < opts.length ? opts[i] : opts[j]);
     }));
-    el.id.value = m.untitled ? "" : m.id; el.stator.value = clean(m.stator); el.model.value = clean(m.model); el.loco.value = clean(m.loco); el.type.value = typeOf(m);
+    el.stator.value = clean(m.stator); el.type.value = typeKnown(m) ? m.type : "";
     f.addEventListener("submit", (e) => {
       e.preventDefault();
       const fail = (msg) => { err.textContent = msg; err.classList.add("show"); err.scrollIntoView({ block: "nearest" }); };
-      const id = el.id.value.trim().toUpperCase(), stator = el.stator.value.trim().toUpperCase(), t1 = el.t1Is.value.trim(), t2 = el.t2Is.value.trim(), swap = !done && el.swap.checked;
-      if (!id) return fail("Motor ID is required.");
-      if (m.untitled && id.startsWith(NEW_ID)) return fail("Enter the motor's real ID.");
+      const stator = el.stator.value.trim().toUpperCase(), id = stator, t1 = el.t1Is.value.trim(), t2 = el.t2Is.value.trim(), swap = !done && el.swap.checked;
       if (!stator) return fail("Stator No. is required.");
-      if (everyMotor().some((o) => o.m !== m && o.m.id.toUpperCase() === id)) return fail(`Motor ${id} already exists.`);
-      const other = everyMotor().find((o) => o.m !== m && (o.m.stator || "").toUpperCase() === stator);
-      if (other) return fail(`Stator No. ${stator} is already registered to ${other.m.id}.`);
+      if (!/^[A-Z0-9][A-Z0-9/#.-]{1,29}$/.test(stator)) return fail("Stator No.: 2–30 letters, numbers, dashes or slashes.");
+      if (!el.type.value) return fail("Choose the motor type: three-phase (DE / NDE) or conventional (PE / CE).");
+      if (everyMotor().some((o) => o.m !== m && (o.m.id.toUpperCase() === stator || (o.m.stator || "").toUpperCase() === stator))) return fail(`Stator No. ${stator} is already registered.`);
       const tid = { t: testId }; // the test itself (ID, device, channel) is fixed
       if (![t1, t2].every(validSensorInfo)) return fail("Pick what each terminal measures.");
       if (termSame(t1, t2)) return fail(termSame(t1, t2));
@@ -1003,21 +1075,22 @@
       if (rv && rv.err) { fail(rv.err); rv.el.focus(); return; }
       const vibChanged = rv && !sameVib(rec.vib, rv.out), vibWas = rec.vib;
 
-      const was = { motor: m.id, is: [isOf(0), isOf(1)], stator: m.stator, model: m.model, loco: m.loco };
+      const was = { motor: m.id, is: [isOf(0), isOf(1)], stator: m.stator, by: rec.startedBy || "" };
+      if (el.startedBy.value.trim()) { const who = starterOf(el.startedBy.value, rec.startedBy); if (!who) return fail("Started by: pick a user from the list."); rec.startedBy = who; }
       rec.termIs = { t1, t2 };
       if (swap) { if (cur) swapRunReadings(m); else swapSavedReadings(r); }
       if (vibChanged) {
         if (hasVib(rv.out)) { rec.vib = rv.out; rec.vibAt = Date.now(); rec.vibBy = (currentUser() || {}).name || ""; }
         else { delete rec.vib; delete rec.vibAt; delete rec.vibBy; }
       }
-      const wasType = typeOf(m), wasIs = was.is;
-      Object.assign(m, { id, stator, type: el.type.value, model: el.model.value.trim() || "—", loco: el.loco.value.trim() || "—" });
+      const wasType = typeKnown(m) ? m.type : "", wasIs = was.is;
+      Object.assign(m, { id, stator, type: el.type.value });
       delete m.untitled;
       saveDevices(); saveSpare();
       d.close();
-      const changes = [was.motor !== id && `motor ${was.motor} → ${id}`, swap && `${namesOf(m).slice(0, 2).join(" and ")} readings swapped`, wasType !== typeOf(m) && `type ${MOTOR_TYPES[wasType].label} → ${MOTOR_TYPES[typeOf(m)].label}`,
+      const changes = [was.motor !== id && `stator no. ${was.motor} → ${id}`, swap && `${namesOf(m).slice(0, 2).join(" and ")} readings swapped`, wasType !== typeOf(m) && `type ${wasType ? MOTOR_TYPES[wasType].label : "not set"} → ${MOTOR_TYPES[typeOf(m)].label}`,
         ...[0, 1].map((j) => wasIs[j] !== isOf(j) && `${namesOf(m)[j]} measures ${wasIs[j]} → ${isOf(j)}`),
-        ...[["stator", "stator"], ["model", "model"], ["loco", "locomotive"]].map(([k, l]) => (was[k] || "—") !== (m[k] || "—") && `${l} ${was[k] || "—"} → ${m[k] || "—"}`),
+        (rec.startedBy || "") !== was.by && `started by ${was.by || "—"} → ${rec.startedBy}`,
         vibChanged && `vibration ${[0, 1].filter((j) => !sameVib([vibWas && vibWas[j]], [rv.out[j]])).map((j) => `${namesOf(m)[j]} ${vibText(vibWas, j) || "—"} → ${vibText(rv.out, j) || "—"}`).join("; ")}`].filter(Boolean);
       logActivity("test", `Edited test ${tid.t} of ${id}${changes.length ? ` — ${changes.join(", ")}` : ""}`);
       toast(`Test ${tid.t} saved`);
@@ -1046,10 +1119,10 @@
         ${dlgHead(`Assign a motor to ${target.name}`, temp ? `Pick the motor on ${chLabel(temp)} · readings already recorded under ${temp.id} stay with it.` : `Pick the motor to test · checking starts straight away on CH ${freeChannel(target)}.`)}
         <div class="modal-body">
           <div class="form-error" id="pkError" role="alert"></div>
-          <div class="pick-test">${testIdField("pk-test", temp ? temp.testId : nextTestId())}</div>
+          <div class="pick-test${temp ? " form-grid" : ""}">${testIdField("pk-test", temp ? temp.testId : nextTestId())}${temp ? startedByField("pk-by", temp.startedBy || me()) : ""}</div>
           <label class="pick-label" for="pk-search">Motor to test</label>
           <div class="input-icon"><i data-icon="search"></i>
-            <input class="input" id="pk-search" type="search" autocomplete="off" placeholder="Search motor ID, stator no., model or locomotive" aria-label="Search motors"></div>
+            <input class="input" id="pk-search" type="search" autocomplete="off" placeholder="Search stator no., motor type or test ID" aria-label="Search motors"></div>
           <div class="pick-count muted" id="pkCount"></div>
           <ul class="pick-list" id="pkList" role="listbox" aria-label="Motors"></ul>
         </div>
@@ -1058,12 +1131,12 @@
     const list = dlg.querySelector("#pkList"), search = dlg.querySelector("#pk-search");
     const draw = () => {
       const term = search.value.trim().toLowerCase(), all = pool();
-      const rows = all.filter(({ d, m }) => [m.id, m.stator, m.model, m.loco, m.testId, d ? d.name : "not assigned"].join(" ").toLowerCase().includes(term));
+      const rows = all.filter(({ d, m }) => [m.id, m.stator, typeLabel(m), m.testId, d ? d.name : "not assigned"].join(" ").toLowerCase().includes(term));
       dlg.querySelector("#pkCount").textContent = all.length ? `${rows.length} of ${all.length} registered motors` : "";
       list.innerHTML = rows.length ? rows.map((x) => `
         <li><button type="button" class="pick-row" data-pick="${esc(x.m.id)}" role="option">
-          <span class="pick-id"><b>${esc(x.m.id)}</b><span>Stator No. <span class="mono">${esc(x.m.stator || "—")}</span></span></span>
-          <span class="pick-info"><span>${esc(x.m.model)}</span><span class="muted">${esc(x.m.loco)}</span></span>
+          <span class="pick-id"><b>${esc(x.m.id)}</b><span>Stator No.</span></span>
+          <span class="pick-info"><span>${typeLabel(x.m)}</span><span class="muted">${pairOf(x.m)}</span></span>
           <span class="pick-where${x.d ? (isRunning(x.m) ? " busy" : "") : " free"}">${esc(where(x))}${x.d && x.m.testId ? ` · ${esc(x.m.testId)}` : ""}</span>
           <span class="pick-go">Assign ${ico("chevronRight")}</span>
         </button></li>`).join("")
@@ -1072,22 +1145,24 @@
     const registerNew = () => {
       const testId = dlg.querySelector("#pk-test").value;
       dlg.close();
-      motorDialog(temp ? { id: temp.id, register: true, testId } : { device: target.id });
+      motorDialog(temp ? { id: temp.id, register: true, testId, startedBy: dlg.querySelector("#pk-by") ? dlg.querySelector("#pk-by").value : "" } : { device: target.id });
     };
     const assign = async (id) => {
       const cur = findMotor(id); if (!cur) return;
       const err = dlg.querySelector("#pkError"), tid = checkTestId(dlg.querySelector("#pk-test").value, temp || cur.m);
       if (tid.err) { err.textContent = tid.err; err.classList.add("show"); dlg.querySelector("#pk-test").focus(); return; }
+      const by = temp ? starterOf(dlg.querySelector("#pk-by").value, temp.startedBy) : "";
+      if (temp && !by) { err.textContent = "Started by: pick a user from the list."; err.classList.add("show"); dlg.querySelector("#pk-by").focus(); return; }
       if (cur.d && isRunning(cur.m) && !(await confirmDialog({ title: `Move ${id} to ${target.name}?`, message: `${id} is being checked on ${cur.d.name}. Its check there stops and ${temp ? `it takes over the run on ${target.name} ${chLabel(temp)}` : `a new run starts on ${target.name}`}.`, confirmLabel: "Move motor", danger: false }))) return;
       dlg.close();
       if (temp) {
         const tempId = temp.id;
         detachMotor(cur); // its earlier run stays in its history
-        Object.assign(temp, { id: cur.m.id, stator: cur.m.stator, model: cur.m.model, loco: cur.m.loco, testId: useTestId(tid.t) });
+        Object.assign(temp, { id: cur.m.id, stator: cur.m.stator, type: cur.m.type, testId: useTestId(tid.t), startedBy: by });
         if (cur.m.tests) temp.tests = cur.m.tests;
         delete temp.untitled;
         saveDevices(); saveSpare();
-        logActivity("test", `${tempId} is motor ${temp.id} (stator ${temp.stator}) · test ${temp.testId}`);
+        logActivity("test", `${tempId} is motor ${temp.id} · test ${temp.testId} · started by ${by}`);
         toast(`${tempId} is now ${temp.id} · ${temp.testId}`);
         if (document.body.dataset.page === "motor") { const from = new URLSearchParams(location.search).get("from");
           location.replace(`motor.html?motor=${encodeURIComponent(temp.id)}${from ? `&from=${encodeURIComponent(from)}` : ""}`); return; }
@@ -1124,7 +1199,7 @@
     }).join("");
     const d = makeDialog("assignDialog", `
       <form id="assignForm" novalidate style="display:contents">
-        ${dlgHead(`Assign ${cur.m.id}`, `Stator No. ${cur.m.stator || "—"} · choose the device that checks this motor.`)}
+        ${dlgHead(`Assign ${cur.m.id}`, `${typeLabel(cur.m)} · choose the device that checks this motor.`)}
         <div class="modal-body">
           <div class="field"><label for="as-dev">Device</label>
             <select class="select" id="as-dev" name="device"><option value="">Not assigned</option>${opts}</select>
@@ -1164,7 +1239,7 @@
     if (!m.testId || !m.trend || !m.trend.length || !m.runStart) return;
     const pk = runPeak(m);
     (m.tests = m.tests || []).unshift({ testId: m.testId, device: d ? d.name : "—", channel: m.channel || null, start: m.runStart, end: m.stoppedAt || Date.now(),
-      type: typeOf(m), de: +pk.de.toFixed(1), nde: +pk.nde.toFixed(1), rise: +pk.rise.toFixed(1), result: evalMotor(m).condition, ...(m.termIs ? { termIs: m.termIs } : {}), ...(hasVib(m.vib) ? { vib: m.vib } : {}),
+      type: typeOf(m), de: +pk.de.toFixed(1), nde: +pk.nde.toFixed(1), rise: +pk.rise.toFixed(1), result: evalMotor(m).condition, ...(m.termIs ? { termIs: m.termIs } : {}), ...(hasVib(m.vib) ? { vib: m.vib } : {}), ...(m.startedBy ? { startedBy: m.startedBy } : {}),
       // its readings every 5 min (or the recording interval, if shorter) from the test start, at most 200, so its report can be made later
       readings: recorded(trendPoints(m), m.runStart, Math.min(5, REC.every)).slice(-200).map((p) => [p.t, ...p.v]) });
     if (m.tests.length > 50) m.tests.length = 50;
@@ -1180,7 +1255,7 @@
     m.testId = useTestId(testId || nextTestId());
     const p = Math.round(44 + Math.random() * 10), ch = freeChannel(d);
     delete m.slot; delete m.stoppedAt; delete m.queued; delete m.termIs; delete m.vib; delete m.vibAt; delete m.vibBy; // a new test on this device
-    Object.assign(m, { base: [p, p + 2, Math.round(28 + Math.random() * 4)], runMin: 0.5, tau: 12, active: true, channel: ch });
+    Object.assign(m, { base: [p, p + 2, Math.round(28 + Math.random() * 4)], runMin: 0.5, tau: 12, active: true, channel: ch, startedBy: me() });
     seedMotor(m, d);
     d.motors.push(m);
   }
@@ -1206,13 +1281,12 @@
     const d = DEVICES.find((x) => x.id === deviceId); if (!d) return;
     if (!d.online) { toast(`${d.name} is offline`); return; }
     if (!freeChannel(d)) { channelsFull(d); return; }
-    const type = await askType(`Switch on ${d.name} CH ${freeChannel(d)}`, "Which type of motor is on this channel? It decides the sensor names and the limits it is judged by · the other details can be added later");
-    if (!type || !freeChannel(d)) return;
-    const m = { id: nextNewId(), stator: "", type, typeSet: true, model: "—", loco: "—", untitled: true };
+    // no type question: the sensors are T1 / T2 until the motor details (with its type) are entered
+    const m = { id: nextNewId(), stator: "", untitled: true };
     attachMotor(m, d, nextTestId());
     saveDevices();
-    logActivity("test", `Switched on ${d.name} ${chLabel(m)} without a motor selected · ${MOTOR_TYPES[type].label} · temporary ID ${m.id} · test ${m.testId}`);
-    toast(`${d.name} ${chLabel(m)} on · ${MOTOR_TYPES[type].label} · ${m.testId} — add the motor details any time`);
+    logActivity("test", `Switched on ${d.name} ${chLabel(m)} without a motor selected · temporary ID ${m.id} · test ${m.testId}`);
+    toast(`${d.name} ${chLabel(m)} on · ${m.testId} — add the motor details (and its type) any time`);
     rerender();
   }
 
@@ -1239,9 +1313,9 @@
     const { d, m } = x;
     const e = d ? evalMotor(m) : null;
     const dlg = viewDialog({
-      title: m.id, sub: d ? `${d.name} · ${d.location}` : "Not assigned to a device",
+      title: m.untitled ? m.id : `Stator No. ${m.id}`, sub: d ? `${d.name} · ${d.location}` : "Not assigned to a device",
       hero: d ? readings(m, d.online) : "",
-      rows: [["Condition", d ? statePill(e, d.online, m) : `<span class="verdict-pill off">Not monitored</span>`], ["Stator No.", `<span class="mono">${esc(m.stator || "—")}</span>`], ["Motor type", `${typeLabel(m)} · sensors ${pairOf(m)}`], ["Model / type", esc(m.model)], ["Locomotive", esc(m.loco)],
+      rows: [["Condition", d ? statePill(e, d.online, m) : `<span class="verdict-pill off">Not monitored</span>`], ["Motor type", `${typeLabel(m)} · sensors ${pairOf(m)}`],
         ["Device", d ? `${esc(d.name)} (${esc(d.id)})` : "Not assigned"], ["Tests", testsText(m, d)], ...(d ? [["Monitoring for", fmtRun(runMinutes(m))], ["Predicted final", e.th && e.th.confident ? `${e.th.finalTemp.toFixed(1)} °C` : "Collecting data"]] : [])],
       actions: `${can("motors.delete") ? `<button type="button" class="btn btn-danger" data-v-del>${ico("trash")}Delete</button>` : ""}${can("motors.update") ? `<button type="button" class="btn" data-v-edit>${ico("edit")}Edit</button>` : ""}${d ? `<a class="btn btn-primary" href="motor.html?motor=${encodeURIComponent(m.id)}${document.body.dataset.page === "motors" ? "&from=motors" : ""}">${ico("activity")}Monitor</a>` : ""}`
     });
@@ -1303,7 +1377,7 @@
     $$(".test-graphs").forEach((b) => (b.dataset.sig = ""));        // report sheets: readings at the new interval
     settingsHooks.forEach((fn) => fn());
     rerender();
-    toast(`Settings changed · readings ${recLabel()} · maximum ${hoursText(LIM.AC.maxHours)} · limit ${LIM.AC.crit} °C`);
+    toast(`Settings changed · readings ${recLabel()} · maximum ${hoursText(LIM.AC.maxHours)} · limit ambient at start + ${LIM_ONE.riseAC} / + ${LIM_ONE.riseDC} °C`);
   }
   window.addEventListener("storage", (e) => { if ([LIMITS_KEY, REC_KEY, VIB_KEY, LIVE_KEY].includes(e.key)) applySettings(); });
   const hasVib = (v) => !!(v && (v[0] || v[1]));
@@ -1369,7 +1443,7 @@
       : { title: `Start monitoring ${m.id}?`, message: `A new test ${nextTestId()} starts now (${m.testId} and its results go into this motor's test history): readings, trend and heating analysis begin from zero.`, confirmLabel: "Start monitoring", danger: false });
     if (!ok) return;
     if (on) { m.runMin = runMinutes(m); m.active = false; m.stoppedAt = Date.now(); }
-    else { archiveRun(m, d); delete m.termIs; delete m.vib; delete m.vibAt; delete m.vibBy; m.testId = useTestId(nextTestId()); m.channel = freeChannel(d, m); m.active = true; delete m.stoppedAt; m.runMin = 0.05; seedMotor(m, d); }
+    else { archiveRun(m, d); m.startedBy = me(); delete m.termIs; delete m.vib; delete m.vibAt; delete m.vibBy; m.testId = useTestId(nextTestId()); m.channel = freeChannel(d, m); m.active = true; delete m.stoppedAt; m.runMin = 0.05; seedMotor(m, d); }
     saveDevices();
     logActivity("test", on ? `Stopped monitoring ${m.id} on ${d.name} ${chLabel(m)} · test ${m.testId} · last result ${VERDICT_SHORT[evalMotor(m).condition]}` : `Started monitoring ${m.id} on ${d.name} ${chLabel(m)} · test ${m.testId}`);
     toast(on ? `${m.id} monitoring stopped · ${m.testId}` : `${m.id} monitoring started · ${m.testId}`);
@@ -1469,14 +1543,22 @@
       <p class="chart-tbl-note muted">${list.length} row${list.length === 1 ? "" : "s"} · ${every ? `one ${recLabel(every)} from the start (recording interval in Settings)` : (note || `every ${STEP_MS / 1000} s sample`) + ", newest first"}${crit != null ? " · coloured at the limits shown on the graph" : ""}</p>`;
   }
 
+  // reading values written on the graphs ("Show values" on each graph): remembered in this browser, on by default
+  const CHART_VALUES = { on: store.get("tt-chart-values", true) !== false };
   // Line chart since monitoring started. cfg = { series: [{ name, short, color, points: [{t, v}] }], lines: [{ v, label, cls }], start, unit, height, every }
   // every (minutes): the table view lists one row per recording interval; without it, every sample
   function lineChart(el, cfg) {
     el._cfg = cfg;
     if (!el._init) {
       el._init = true;
-      el.innerHTML = `<div class="chart-plot"><svg role="img"></svg><div class="chart-tip" aria-hidden="true"></div></div><div class="chart-table"></div>`;
+      el.innerHTML = `<div class="chart-plot"><svg role="img"></svg><div class="chart-tip" aria-hidden="true"></div>${cfg.values === false ? "" : `<label class="chart-vals"><input type="checkbox"${CHART_VALUES.on ? " checked" : ""}> Show values</label>`}</div><div class="chart-table"></div>`;
       const plot = el.querySelector(".chart-plot");
+      // one choice for every graph: tick it here and the others follow
+      el.querySelector(".chart-vals input")?.addEventListener("change", (e) => {
+        CHART_VALUES.on = e.target.checked; store.set("tt-chart-values", CHART_VALUES.on);
+        $$(".chart-vals input").forEach((i) => (i.checked = CHART_VALUES.on));
+        $$(".chart").forEach((c) => c._cfg && drawLine(c));
+      });
       plot.addEventListener("pointermove", (e) => { if (el._geo) { el._hx = el._geo.tAt(e.clientX - el.getBoundingClientRect().left); drawLine(el); } });
       plot.addEventListener("pointerleave", () => { el._hx = null; drawLine(el); });
     }
@@ -1543,6 +1625,29 @@
     const ends = series.filter((s) => s.label !== false).map((s) => ({ s, p: s.points[s.points.length - 1] })).map((o) => ({ ...o, ly: y(o.p.v) })).sort((a, b) => a.ly - b.ly);
     for (let i = 1; i < ends.length; i++) if (ends[i].ly - ends[i - 1].ly < 13) ends[i].ly = ends[i - 1].ly + 13;
     ends.forEach((o) => { out += `<circle cx="${x(o.p.t)}" cy="${y(o.p.v)}" r="3.5" style="fill:${o.s.color}"/><text class="end-label" x="${W - M.r + 8}" y="${o.ly + 4}">${esc(o.s.short)} ${o.p.v.toFixed(1)}</text>`; });
+    if (el._cfg.values !== false && CHART_VALUES.on) {
+      const S = series.filter((s) => !s.dash && s.points.length > 1);
+      const base = S.reduce((a, s) => (!a || s.points.length > a.points.length ? s : a), null);
+      if (base) {
+        const picks = []; let lastX = -Infinity;
+        // one place about every 90 px, never over the end labels (the latest value is written there already)
+        base.points.slice(0, -1).forEach((p) => { const px = x(p.t); if (px - lastX >= 90 && W - M.r - px > 40) { picks.push(p.t); lastX = px; } });
+        const at = (s, t) => s.points.reduce((b, p) => (Math.abs(p.t - t) < Math.abs(b.t - t) ? p : b), s.points[0]);
+        picks.forEach((t) => {
+          const hs = S.map((s) => ({ s, p: at(s, t) })).map((h) => ({ ...h, px: x(h.p.t), py: y(h.p.v) })).sort((a, b) => a.py - b.py);
+          let below = -Infinity;
+          hs.forEach((h, k) => {
+            const txt = h.p.v.toFixed(1), bw = txt.length * 6.2 + 10, bh = 16;
+            const by = k === 0 ? Math.max(M.t, h.py - bh - 6) : Math.min(H - M.b - bh - 2, Math.max(h.py + 6, below + 2));
+            if (k) below = by + bh;
+            const bx = Math.min(Math.max(h.px - bw / 2, M.l + 1), W - M.r - bw - 1);
+            out += `<circle class="pt-dot" cx="${h.px.toFixed(1)}" cy="${h.py.toFixed(1)}" r="3.2" style="stroke:${h.s.color}"/>`
+              + `<rect class="pt-pill" x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh}" rx="5" style="fill:${h.s.color}"/>`
+              + `<text class="pt-label" x="${(bx + bw / 2).toFixed(1)}" y="${(by + 11.5).toFixed(1)}" text-anchor="middle">${txt}</text>`;
+          });
+        });
+      }
+    }
     if (el._hx != null) {
       const near = (pts) => pts.reduce((b, p) => (Math.abs(p.t - el._hx) < Math.abs(b.t - el._hx) ? p : b), pts[0]);
       const hits = series.map((s) => ({ s, p: near(s.points) })).filter((h) => Math.abs(h.p.t - el._hx) <= Math.max(90000, (t1 - t0) / 60));
@@ -1564,23 +1669,31 @@
   window.addEventListener("resize", () => { clearTimeout(rzTimer); rzTimer = setTimeout(() => $$(".chart").forEach((c) => c._cfg && drawLine(c)), 120); });
 
   // the temperature limit as a line on the temperature graphs
-  const runLines = (rec) => { const L = limitsOf(rec); return [{ v: L.crit, label: `Must not exceed ${L.crit} °C`, cls: "limit" }]; };
+  // the graph's limit line: ambient at the test start + the type's rise. A motor without details shows both types:
+  // the type picked at switch-on in red (it decides Unstable), the other as a grey reference line
+  const runLines = (rec) => {
+    const a = startAmbOf(rec);
+    if (a == null) return [];
+    const own = typeOf(rec), line = (t, cls) => { const n = riseLimitOf(rec, t), v = +(a + n).toFixed(1);
+      return { v, cls, label: `${rec && rec.untitled ? `${MOTOR_TYPES[t].label.replace(/ motor$/, "")} · ` : ""}Must not exceed ${v} °C (ambient ${a.toFixed(1)} + ${n})` }; };
+    return rec && (rec.untitled || !typeKnown(rec)) && !(rec.readings && rec.type) ? [line(own, "limit"), line(own === "AC" ? "DC" : "AC", "limit-alt")] : [line(own, "limit")];
+  };
 
 
   // grouped bars: T1 / T2 temperature of every motor, against the temperature it must not exceed
   function riseBars(rows) {
-    const Ls = rows.map((r) => limitsOf(r.m)), L0 = Ls[0], same = Ls.every((L) => L.crit === L0.crit);
-    const max = Math.max(...Ls.map((L) => L.crit * 1.1), ...rows.map((r) => Math.max(r.e.hot, r.e.th && r.e.th.confident ? r.e.th.finalTemp : 0) + 4));
+    const Ls = rows.map((r) => tempLimitOf(r.m)).map((v) => (isFinite(v) ? v : null));
+    const max = Math.max(...Ls.filter((v) => v != null).map((v) => v * 1.1), ...rows.map((r) => Math.max(r.e.hot, r.e.th && r.e.th.confident ? r.e.th.finalTemp : 0) + 4));
     const ticks = Array.from({ length: Math.floor(max / 20) + 1 }, (_, i) => i * 20);
-    const marks = (L) => `<i class="rb-mark fail" style="left:${pct(L.crit, max)}"></i>`;
+    const marks = (v) => (v == null ? "" : `<i class="rb-mark fail" style="left:${pct(v, max)}"></i>`);
     return `<div class="rb">
-      <div class="rb-row rb-head"><span></span><span class="rb-track rb-labels">${same ? `<span class="fail" style="left:${pct(L0.crit, max)}">Must not exceed ${L0.crit} °C</span>` : `<span style="left:0;transform:none">Marks: each motor type's temperature limit</span>`}</span><span></span></div>
+      <div class="rb-row rb-head"><span></span><span class="rb-track rb-labels"><span style="left:0;transform:none">Red marks: each motor's limit · ambient at its test start + ${LIM_ONE.riseAC} °C (three-phase) / + ${LIM_ONE.riseDC} °C (conventional)</span></span><span></span></div>
       ${rows.map(({ d, m, e }) => {
         const conf = e.th && e.th.confident;
         const tip = MS.map((j) => `${namesOf(m)[j]}: ${m.live[j].toFixed(1)} °C${conf ? ` → final ${(m.live[AMB] + e.th.sensors[j].final).toFixed(1)} °C` : ""}`).join("|");
-        return `<a class="rb-row" href="motor.html?motor=${encodeURIComponent(m.id)}" data-tip="${esc(m.id)} · ${esc(d.name)}|${tip}|Must not exceed ${limitsOf(m).crit} °C">
+        return `<a class="rb-row" href="motor.html?motor=${encodeURIComponent(m.id)}" data-tip="${esc(m.id)} · ${esc(d.name)}|${tip}|Must not exceed ${esc(limitWords(m))}">
           <span class="rb-label"><b>${esc(m.id)}</b><span>${esc(d.name)} · ${typeShort(m)}</span></span>
-          <span class="rb-track">${marks(limitsOf(m))}${MS.map((j) => {
+          <span class="rb-track">${marks(isFinite(tempLimitOf(m)) ? tempLimitOf(m) : null)}${MS.map((j) => {
             const fin = conf ? m.live[AMB] + e.th.sensors[j].final : null;
             return `<span class="rb-lane">${fin != null ? `<span class="rb-ghost" style="width:${pct(fin, max)};border-color:${COLORS[j]}"></span>` : ""}<span class="rb-bar" style="width:${pct(m.live[j], max)};background:${COLORS[j]}"></span></span>`;
           }).join("")}</span>
@@ -1592,18 +1705,18 @@
   }
   // the same motors as a table: each sensor's temperature, the hottest, the predicted final temperature, the test time and the condition
   function riseTable(rows) {
-    const cls = (v, L) => (v > L.crit ? "t-crit" : "");
+    const cls = (v, lim) => (v > lim ? "t-crit" : "");
     return `<div class="table-wrap"><table class="table responsive chart-tbl rise-tbl"><thead><tr><th>Motor</th><th>Device · type</th>${MS.map((j) => `<th class="num" title="${PROBE_NAME[PROBES[j]]}"><i class="sw" style="background:${COLORS[j]}"></i>${PROBES[j]} °C</th>`).join("")}<th class="num">Hottest °C</th><th class="num">Predicted final °C</th><th class="num">Test time</th><th>Condition</th></tr></thead>
       <tbody>${rows.map(({ d, m, e }) => {
-        const conf = e.th && e.th.confident, L = limitsOf(m), N = namesOf(m);
+        const conf = e.th && e.th.confident, L = limitsOf(m), TL = tempLimitOf(m), N = namesOf(m);
         return `<tr><td class="lead-cell" data-label="Motor"><a class="mono" href="motor.html?motor=${encodeURIComponent(m.id)}">${esc(m.id)}</a></td><td data-label="Device · type"><div class="cell-stack">${esc(d.name)}<small class="muted cell-sub">${typeShort(m)}</small></div></td>
-          ${MS.map((j) => `<td data-label="${N[j]} °C" class="num ${cls(m.live[j], L)}"><small class="muted">${N[j]}</small> ${m.live[j].toFixed(1)}</td>`).join("")}
-          <td data-label="Hottest °C" class="num ${cls(e.hot, L)}"><b>${e.hot.toFixed(1)}</b></td>
-          <td data-label="Predicted final °C" class="num ${conf ? cls(e.th.finalTemp, L) : ""}">${conf ? e.th.finalTemp.toFixed(1) : '<span class="muted">Collecting data</span>'}</td>
+          ${MS.map((j) => `<td data-label="${N[j]} °C" class="num ${cls(m.live[j], TL)}"><small class="muted">${N[j]}</small> ${m.live[j].toFixed(1)}</td>`).join("")}
+          <td data-label="Hottest °C" class="num ${cls(e.hot, TL)}"><b>${e.hot.toFixed(1)}</b></td>
+          <td data-label="Predicted final °C" class="num ${conf ? cls(e.th.finalTemp, TL) : ""}">${conf ? e.th.finalTemp.toFixed(1) : '<span class="muted">Collecting data</span>'}</td>
           <td data-label="Test time" class="num${e.over ? " t-crit" : ""}">${fmtRun(e.runMin)} <small class="muted">of ${L.maxHours} h</small></td>
           <td data-label="Condition">${statePill(e, true, m)}</td></tr>`;
       }).join("")}</tbody></table></div>
-      <p class="chart-tbl-note muted">${rows.length} motor${rows.length === 1 ? "" : "s"} · hottest first · must not exceed ${LIM.AC.crit} °C · Stable when settled within ${hoursText(LIM.AC.maxHours)}</p>`;
+      <p class="chart-tbl-note muted">${rows.length} motor${rows.length === 1 ? "" : "s"} · hottest first · must not exceed ${riseRuleText()} · Stable when settled within ${hoursText(LIM.AC.maxHours)}</p>`;
   }
   const verdictDot = (s) => `<span class="v-dot ${s}" aria-label="${VERDICT_SHORT[s]}">${ico(STATUS[s].icon)}</span>`;
 
@@ -1638,10 +1751,30 @@
     </svg>`;
   }
 
-  const limitLine = (rec) => { const L = limitsOf(rec); return `${typeLabel(rec)} · must not exceed ${L.crit} °C · Stable when the last ${L.settleN} readings each change less than ${L.settleDiff} °C within ${hoursText(L.maxHours)}`; };
+  const limitLine = (rec) => { const L = limitsOf(rec); return `${typeLabel(rec)} · must not exceed ${limitWords(rec)} · Stable when the last ${L.settleN} readings each change less than ${L.settleDiff} °C within ${hoursText(L.maxHours)}`; };
 
   // a running test past its maximum hours keeps running: say so, with the result it ended with
   const overNote = (m, e) => (e.over && isRunning(m) ? `<div class="panel-note over-note${e.condition === "crit" ? " crit" : ""}" role="status">${ico("clock")}<span>Maximum test hours exceeded (${hoursText(limitsOf(m).maxHours)}) · result ${VERDICT_SHORT[e.condition]} · stop the test when ready</span></div>` : "");
+  // a motor's test time on its Monitor widget: when it started, how long it has run (of the maximum hours), when it stopped
+  // compact: one plain line for the stopped-motors list
+  function panelTime(m, compact = false) {
+    if (!m.runStart) return "";
+    if (compact) {
+      const at = (t) => { const d = new Date(t), hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); return new Date().toDateString() === d.toDateString() ? hm : `${d.toLocaleDateString([], { day: "2-digit", month: "short" })}, ${hm}`; };
+      return `<span class="dq-time">Started ${at(m.runStart)} · Ran ${fmtRun(runMinutes(m))}${m.stoppedAt ? ` · Stopped ${at(m.stoppedAt)}` : ""}</span>`;
+    }
+    const clock = (t) => { const d = new Date(t), today = new Date().toDateString() === d.toDateString(), hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return today ? hm : `${d.toLocaleDateString([], { day: "2-digit", month: "short" })}, ${hm}`; };
+    const run = isRunning(m), mins = runMinutes(m), max = limitsOf(m).maxHours, left = max * 60 - mins, over = run && left <= 0;
+    // three figures in the widget's header: Started · Time taken · Remaining (to the maximum test hours) — or Stopped once stopped
+    const cell = (label, value, cls = "", tip = "") => `<div class="mt-cell${cls}"${tip ? ` title="${esc(tip)}"` : ""}><span>${label}</span><b class="num">${value}</b></div>`;
+    return `<div class="mp-time" aria-label="Test time">
+        ${cell(`${ico("clock")}Started`, clock(m.runStart), "", new Date(m.runStart).toLocaleString())}
+        ${cell("Time taken", fmtRun(mins), "", `of the maximum ${hoursText(max)}`)}
+        ${run ? cell(over ? "Over by" : "Remaining", fmtRun(Math.abs(left)), over ? " over" : "", `Maximum test hours: ${hoursText(max)}`)
+          : cell("Stopped", m.stoppedAt ? clock(m.stoppedAt) : "—", "", m.stoppedAt ? new Date(m.stoppedAt).toLocaleString() : "")}
+      </div>`;
+  }
   function motorPanel(d, m, selected = false) {
     const e = evalMotor(m);
     return `
@@ -1649,8 +1782,9 @@
         <div class="mp-head">
           <div class="mp-id"><b class="ch-tag">${chLabel(m)}</b>${channelBtn(m, d)}${terminalBtn(m, d)}<b class="mp-name mono">${esc(m.id)}</b></div>
           ${statePill(e, true, m)}
-          <div class="mp-meta">${m.untitled ? "Details pending" : esc(m.loco)} · <span class="mono" title="Test ID">${esc(m.testId || "—")}</span></div>
+          <div class="mp-meta">${m.untitled ? "Details pending" : typeShort(m)} · <span class="mono" title="Test ID">${esc(m.testId || "—")}</span></div>
           ${triggerBtn(m, d)}
+          ${panelTime(m)}
         </div>
         ${m.untitled ? `<div class="panel-note">${ico("edit")}<span>Reading without motor details</span><button type="button" class="btn btn-sm btn-primary" data-edit-motor="${esc(m.id)}">Add details</button></div>` : ""}
         ${overNote(m, e)}
@@ -1660,7 +1794,7 @@
           <div class="ph-text">
             <span>${trendText(e)}</span>
             <b class="num">${e.th && e.th.confident ? `Final ≈ ${e.th.finalTemp.toFixed(1)} °C` : "Final: collecting data…"}</b>
-            <small class="num">${e.th && e.th.confident ? (e.th.alarmIn != null && e.hot <= limitsOf(m).crit ? `Above ${limitsOf(m).crit} °C in about ${fmtMin(e.th.alarmIn)}` : e.stable ? "Temperatures settled" : e.th.eqIn < 1 ? "Settling" : `Settles in about ${fmtMin(e.th.eqIn)}`) : "&nbsp;"}</small>
+            <small class="num">${e.th && e.th.confident ? (e.th.alarmIn != null && e.hot <= tempLimitOf(m) ? `Above ${tempLimitOf(m)} °C in about ${fmtMin(e.th.alarmIn)}` : e.stable ? "Temperatures settled" : e.th.eqIn < 1 ? "Settling" : `Settles in about ${fmtMin(e.th.eqIn)}`) : "&nbsp;"}</small>
           </div>
           <a href="motor.html?motor=${encodeURIComponent(m.id)}">Details →</a>
         </div>`}
@@ -1697,12 +1831,66 @@
       <ul>${done.map((m) => {
         const e = evalMotor(m);
         return `<li class="dq-row${m.id === selectedId ? " is-selected" : ""}" data-pick-motor="${esc(m.id)}">
-          <span class="dq-id"><b>${esc(m.id)}</b><span>${esc(m.testId || "—")}${m.channel ? ` · was ${chLabel(m)}` : ""} · ${esc(m.loco)}</span></span>
+          <span class="dq-id"><b>${esc(m.id)}</b><span>${esc(m.testId || "—")}${m.channel ? ` · was ${chLabel(m)}` : ""} · ${typeShort(m)}</span>${panelTime(m, true)}</span>
           <span class="dq-state">${statePill(e, true, m)}<small>rise ${e.rise.toFixed(1)} °C${hasVib(m.vib) ? " · vibration recorded" : ""}</small></span>
           ${vibBtn(m)}${triggerBtn(m, d)}
         </li>`;
       }).join("")}</ul>
     </div>`;
+  }
+
+  /* =========================================================
+     Page: Demo (display.html) — a read-only screen at the test bench: one device's two channels, large.
+     Nothing on it changes data (no switches, edits or downloads); it refreshes with every reading.
+     ========================================================= */
+  function pageDisplay() {
+    const sel = $("#dsDevice"), main = $("#dsMain"), q = new URLSearchParams(location.search);
+    let id = DEVICES.some((d) => d.id === q.get("device")) ? q.get("device") : (DEVICES.find((d) => d.online) || DEVICES[0] || {}).id;
+    sel.innerHTML = DEVICES.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} · ${esc(d.location)}</option>`).join("");
+    if (id) sel.value = id;
+    sel.addEventListener("change", () => { id = sel.value; history.replaceState(null, "", `display.html?device=${encodeURIComponent(id)}`); frame(); render(); });
+    const clock = () => ($("#dsClock").textContent = new Date().toLocaleString([], { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    clock(); setInterval(clock, 1000);
+    $("#dsFull").addEventListener("click", () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {})));
+    // fixed frame (the graphs keep their state); its contents refresh with every reading
+    const frame = () => {
+      main.innerHTML = !DEVICES.length ? `<div class="disp-empty">No devices registered yet.</div>`
+        : `<div class="disp-grid">${CHANNELS.map((c, k) => `${k === 1 ? '<div class="disp-ta" id="dsTA"></div>' : ""}<section class="disp-ch" id="dsCh${c}"><div class="disp-top"></div><div class="disp-graph"><div class="chart" id="dsChart${c}"></div></div></section>`).join("")}</div>`;
+    };
+    const fill = (d, c) => {
+      const box = $(`#dsCh${c}`), top = $(".disp-top", box), chart = $(`#dsChart${c}`), m = runningOn(d).find((x) => x.channel === c) || null;
+      chart.parentElement.hidden = !m || !d.online;
+      if (!m) { box.className = "disp-ch is-free"; top.innerHTML = `<div class="disp-free"><span class="ch-tag">CH ${c}</span><b>No motor on this channel</b><span>${d.online ? "Free" : "Device offline"}</span></div>`; return; }
+      const e = evalMotor(m), st = d.online ? e.status : "off", N = namesOf(m);
+      box.className = `disp-ch is-${st}`;
+      const lim = tempLimitOf(m), a0 = startAmbOf(m), fillPct = isFinite(lim) && a0 != null ? Math.max(0, Math.min(1, (e.hot - a0) / Math.max(1, lim - a0))) : 0;
+      top.innerHTML = `
+        <div class="disp-ch-head">
+          <span class="ch-tag">CH ${c}</span>
+          <div class="disp-id"><b class="mono">${esc(m.id)}</b><span>${m.untitled ? "Details pending" : typeLabel(m)} · <span class="mono">${esc(m.testId || "—")}</span></span></div>
+          ${verdictPill(st === "stop" ? e.condition : st)}
+        </div>
+        ${panelTime(m)}
+        ${readings(m, d.online, "disp-big", true)}
+        <div class="disp-limit${fillPct >= 1 ? " over" : fillPct >= 0.85 ? " near" : ""}">
+          <div class="disp-limit-txt"><span>Hottest <b class="num">${d.online ? e.hot.toFixed(1) : "—"} °C</b></span><span>Must not exceed <b class="num">${isFinite(lim) ? lim.toFixed(1) : "—"} °C</b> <small>${a0 != null ? `ambient at start ${a0.toFixed(1)} + ${riseLimitOf(m)}` : ""}</small></span></div>
+          <div class="disp-bar"><i style="width:${(fillPct * 100).toFixed(1)}%"></i></div>
+        </div>
+        <div class="disp-why ${st}">${st === "ok" ? "All checks within limits" : st === "off" ? "Device offline" : esc(reasonOf(e))}</div>`;
+      if (d.online) {
+        const rt = rtPoints(m);
+        lineChart(chart, { series: rtSeries(m, rt.pts), lines: runLines(m), start: rt.from, clockTicks: true, unit: "°C", height: 200, title: `${m.id} live`, table: false, xfmt: rt.xfmt });
+      }
+    };
+    const render = () => {
+      const d = DEVICES.find((x) => x.id === id);
+      if (!d) return;
+      document.title = `${d.name} · Demo · TractionTherm`;
+      CHANNELS.forEach((c) => fill(d, c));
+      $("#dsTA").innerHTML = taCenter(d);
+    };
+    frame(); render();
+    return render;
   }
 
   /* =========================================================
@@ -1809,7 +1997,6 @@
       ev.preventDefault();
       location.href = `motor.html?motor=${encodeURIComponent(panel.dataset.pickMotor)}`;
     });
-    $$("[name=monFilter]").forEach((r) => r.addEventListener("change", () => { filter = r.value; render(); }));
     render();
     if (target) {
       const card = $(`#dev-${CSS.escape(target)}`);
@@ -1851,7 +2038,7 @@
     const STATUS_C = { ok: COL.ok, warn: COL.warn, crit: COL.crit, stop: COL.stop, off: COL.stop };
     // housing colour from how close the hottest probe is to the temperature limit (as a rise above ambient: red at the limit);
     // a checked (stopped) motor keeps the colour of its last readings, a little muted
-    const heatW = (m) => 0.8 * heatC(m), heatC = (m) => Math.max(5, limitsOf(m).crit - m.live[AMB]);
+    const heatW = (m) => 0.8 * heatC(m), heatC = (m) => Math.max(5, (isFinite(tempLimitOf(m)) ? tempLimitOf(m) : m.live[AMB] + riseLimitOf(m)) - m.live[AMB]);
     const heat = (m, on) => {
       const rise = hotOf(m.live) - m.live[AMB], w = heatW(m), c = heatC(m);
       const col = rise < w ? mix([92, 122, 158], [190, 170, 110], Math.max(0, (rise - w * 0.5) / (w * 0.5)))
@@ -2138,8 +2325,8 @@
         // motor details: terminal box → card
         add(`<a class="scene-tag ${s.st}${m.id === focusId ? " is-focus" : ""}" href="motor.html?motor=${encodeURIComponent(m.id)}" title="Open ${esc(m.id)}">
           <b>${s.on || !solo ? "" : "Stopped · "}CH ${ch} · ${esc(m.id)}</b>
-          <span class="x">${m.untitled ? "Details pending — add the motor details" : `${typeShort(m)} · ${esc(m.model)} · ${esc(m.loco)}`}</span>
-          <span class="x">${m.untitled ? "No stator no. yet" : `Stator <span class="mono">${esc(m.stator || "—")}</span>`} · <span class="mono">${esc(m.testId || "—")}</span> · ${fmtRun(runMinutes(m))}</span>
+          <span class="x">${m.untitled ? "Details pending — add the motor details" : `${typeLabel(m)} · ${pairOf(m)}`}</span>
+          <span class="x">${m.untitled ? "No stator no. yet" : "Stator No."} · <span class="mono">${esc(m.testId || "—")}</span> · ${fmtRun(runMinutes(m))}</span>
           <span class="x">Rise ${live ? e.rise.toFixed(1) : "—"} °C above ambient</span>${verdictPill(s.st)}</a>`,
           [x, MY + R + 8, z], 120, -62, { line: true, color: rgb(STATUS_C[s.st]) });
         // probes: T1 at the drive (shaft) end, T2 at the fan end
@@ -2335,12 +2522,12 @@
     const start = cur ? m.runStart : r.start;
     const rows = recorded(pts, start).map((p, i, a) => ({ t: p.t, v: p.v, diff: MS.map((j) => (i ? p.v[j] - a[i - 1].v[j] : 0)) }));
     const first = rows[0], last = rows[rows.length - 1];
-    const hour = last ? rows.filter((x) => x.t >= last.t - 3600000 - 1000) : [];
+    const hour = rows.slice(-L.rateN); // the last rateN readings (the last hour with 15 min readings): the rate-of-change rule's readings
     const tail = rows.length > L.settleN ? rows.slice(-L.settleN) : null; // the last settleN changes
     const e = cur ? evalMotor(m) : null;
     const result = cur ? (d && !d.online ? "off" : e.status === "stop" ? e.condition : e.status) : r.result;
     return {
-      tm: m.id, testId: rec.testId || "—", start, type, names: MOTOR_TYPES[type].names, L, every: REC.every, rows,
+      tm: m.id, testId: rec.testId || "—", start, type, names: namesOf(cur || !r.type ? m : r).slice(0, 2), known: typeKnown(cur || !r.type ? m : r), L, every: REC.every, rows,
       device: cur ? (d ? `${d.name}${m.channel ? ` · CH ${m.channel}` : ""}` : "—") : `${r.device}${r.channel ? ` · CH ${r.channel}` : ""}`,
       running: cur && isRunning(m), result, resultText: VERDICT_SHORT[result] || "—", vib: (cur ? m.vib : r.vib) || null,
       sum: last ? {
@@ -2357,9 +2544,9 @@
   const failing = (e, type) => e.checks.some((c) => c.t === type && c.s !== "ok");
   // every field of one test (Results table, its Full details, and the downloaded report). Slot names T1 / T2: lists mix motor types
   // the key columns of a test result: the Results table on screen and its PDF
-  const KEY_COLS_PDF = ["Test ID", "Motor", "Condition", "Started", "Monitoring for", "Rise °C", "Device", "Model / type"];
-  const TEST_COLS = ["Test ID", "Motor", "Stator No.", "Model / type", "Locomotive", "Device", "Channel", "Location", "Started", "Monitoring for", "State", ...PROBES.map((p) => `${p} °C`), "Rise °C", `${PAIR} Δ °C`, "Predicted final °C", "τ min", "Settled",
-    "Initial ambient °C", "Final ambient °C", `Temp raise ${T1N} °C`, `Temp raise ${T2N} °C`, `Max diff last 1 h ${T1N} °C`, `Max diff last 1 h ${T2N} °C`, "Largest change, settle check °C",
+  const KEY_COLS_PDF = ["Test ID", "Stator No.", "Condition", "Started", "Started by", "Monitoring for", `Temp raise ${T1N} °C`, `Temp raise ${T2N} °C`, "Device", "Motor type"];
+  const TEST_COLS = ["Test ID", "Stator No.", "Motor type", "Device", "Channel", "Location", "Started", "Started by", "Monitoring for", "State", ...PROBES.map((p) => `${p} °C`), "Rise °C", `${PAIR} Δ °C`, "Predicted final °C", "τ min", "Settled",
+    "Initial ambient °C", "Final ambient °C", `Temp raise ${T1N} °C`, `Temp raise ${T2N} °C`, `Max − min, last readings ${T1N} °C`, `Max − min, last readings ${T2N} °C`, "Largest change, settle check °C",
     `Vibration ${T1N} mm/s`, `Vibration ${T1N} gE`, `Vibration ${T2N} mm/s`, `Vibration ${T2N} gE`, "Condition", "Reason"];
   // t: { cur, d, m, r, start } (d: the device the test ran on), sh: its testSheet → { t, status, types, reason, cells } in TEST_COLS order
   function testRow(t, sh) {
@@ -2370,17 +2557,17 @@
     if (t.cur) {
       const e = evalMotor(m), th = e.th, ok = th && th.confident, res = isRunning(m) ? (d.online ? e.status : "off") : e.condition;
       return { t: t.start || 0, status: res, types: Object.keys(CTYPE_CHECK).filter((k) => failing(e, k)), reason: res === "ok" ? "" : reasonOf(e),
-        cells: [m.testId, m.id, m.stator || "", `${typeShort(m)} · ${m.model}`, m.loco, d.name, chLabel(m), d.location, t.start ? repStamp(t.start) : "", fmtRun(runMinutes(m)), isRunning(m) && d.online ? "In progress" : "Completed",
+        cells: [m.testId, m.id, typeShort(m), d.name, chLabel(m), d.location, t.start ? repStamp(t.start) : "", m.startedBy || "", fmtRun(runMinutes(m)), isRunning(m) && d.online ? "In progress" : "Completed",
           ...m.live.map(f1), e.rise.toFixed(1), e.dev.toFixed(1), ok ? th.finalTemp.toFixed(1) : "", ok ? th.tau.toFixed(0) : "", e.stable ? "Yes" : "Not yet", ...calc, VERDICT_SHORT[res], res === "ok" ? "" : reasonOf(e)] };
     }
     // an earlier test: its last stored reading, or its peaks when no readings were kept
     const r = t.r, last = r.readings && r.readings.length ? r.readings[r.readings.length - 1].slice(1) : null;
     const v = last || [r.de, r.nde, NaN], spread = last ? spreadOf(last) : Math.abs(r.de - r.nde);
-    const TL = limitsOf(r.type ? r : m), hotT = Math.max(r.de, r.nde) > TL.crit;
-    const fin = finalResult(r.result), types = [hotT && "temp", fin === "crit" && !hotT && "hours"].filter(Boolean);
+    const hotT = Math.max(r.de, r.nde) > tempLimitOf({ readings: r.readings }, typeOf(r.type ? r : m));
+    const fin = finalResult(r.result), types = fin === "crit" ? [hotT && "temp", !hotT && "hours"].filter(Boolean) : []; // a finished test keeps its result: reasons only for an Unstable one
     const reason = fin === "ok" ? "" : types.map((k) => CTYPE_NAME[k]).join(" · ") || "See test readings";
     return { t: r.start, status: fin, types, reason,
-      cells: [r.testId, m.id, m.stator || "", `${typeShort(r.type ? r : m)} · ${m.model || ""}`, m.loco || "", r.device, r.channel ? `CH ${r.channel}` : "", d ? d.location : "", repStamp(r.start), fmtRun((r.end - r.start) / 60000), "Completed",
+      cells: [r.testId, m.id, typeShort(r.type ? r : m), r.device, r.channel ? `CH ${r.channel}` : "", d ? d.location : "", repStamp(r.start), r.startedBy || "", fmtRun((r.end - r.start) / 60000), "Completed",
         ...v.map((x) => (isFinite(x) ? f1(x) : "")), f1(r.rise), f1(spread), "", "", sh.sum && sh.sum.settle[0] != null ? (Math.max(...sh.sum.settle) < sh.L.settleDiff ? "Yes" : "Not yet") : "", ...calc, VERDICT_SHORT[fin], reason] };
   }
   // the Full details of a sheet's test, for the downloaded report: [label, value] with the motor's own sensor names
@@ -2397,7 +2584,7 @@
     return [
       ["Runtest duration", s.duration, s.duration], ["Initial ambient temp", f1s(s.ambStart), f1s(s.ambStart)], ["Final ambient temp", f1s(s.ambEnd), f1s(s.ambEnd)],
       ["Final temp", f1s(s.final[0]), f1s(s.final[1])], ["Temp raise", f1s(s.raise[0]), f1s(s.raise[1])],
-      ["Max diff in last 1hr temp readings", f1s(s.maxHr[0]), f1s(s.maxHr[1])],
+      [`Max − min of last ${sh.L.rateN} readings${sh.L.rateN > 1 ? ` (${fmtRun((sh.L.rateN - 1) * sh.every)})` : ""}`, f1s(s.maxHr[0]), f1s(s.maxHr[1])],
       ...[0, 1].filter((j) => sh.vib && sh.vib[j]).map((j) => [`SKF reading ${sh.names[j]} side`, `${sh.vib[j].mms} mm/s`, `${sh.vib[j].ge} gE`])
     ];
   }
@@ -2410,7 +2597,7 @@
     const sum = sheetSummary(sh).map(([k, a, b, col]) => `<tr><td>${esc(k)}</td>${b === undefined
       ? `<td colspan="2" class="num">${col && VERDICT_SHORT[col] ? `${verdictPill(col)}${sh.running ? ' <span class="muted">running</span>' : ""}` : esc(a)}</td>`
       : `<td class="num${Array.isArray(col) && col[0] ? " t-ok" : ""}">${esc(a)}</td><td class="num${Array.isArray(col) && col[1] ? " t-ok" : ""}">${esc(b)}</td>`}</tr>`).join("");
-    return `<div class="sheet-meta"><span>TM NO <b class="mono">${esc(sh.tm)}</b></span><span>DATE <b>${dmy(sh.start)}</b></span></div>
+    return `<div class="sheet-meta"><span>STATOR NO <b class="mono">${esc(sh.tm)}</b></span><span>DATE <b>${dmy(sh.start)}</b></span></div>
     <div class="sheet">
       <div class="sheet-read"><div class="table-wrap sheet-box"><table class="table sheet-tbl" aria-label="Readings of test ${esc(sh.testId)}">
         <thead><tr><th>Time</th><th class="num">${N[0]} °C</th><th class="num">Diff</th><th class="num">${N[1]} °C</th><th class="num">Diff</th><th class="num" title="Ambient air">TA °C</th></tr></thead>
@@ -2428,7 +2615,7 @@
     if (holder._html !== html) { holder._html = html; holder.innerHTML = html; }
     const el = holder.querySelector(".sheet-plot");
     if (sh.rows.length < 2) { el.innerHTML = '<p class="muted">The graph needs at least two readings.</p>'; el._init = false; return; }
-    lineChart(el, { series: [...sh.names, "TA"].map((n, j) => ({ name: j === AMB ? "TA · Ambient air" : `${n} · ${MOTOR_TYPES[sh.type].is[j]}`, short: n, color: COLORS[j], points: sh.rows.map((r) => ({ t: r.t, v: r.v[j] })) })),
+    lineChart(el, { series: [...sh.names, "TA"].map((n, j) => ({ name: j === AMB ? "TA · Ambient air" : `${n} · ${sh.known ? MOTOR_TYPES[sh.type].is[j] : `Terminal ${j + 1}`}`, short: n, color: COLORS[j], points: sh.rows.map((r) => ({ t: r.t, v: r.v[j] })) })),
       start: sh.rows[0].t, unit: "°C", height: 250, title: sh.tm, table: false, xfmt: hm });
   }
   const sheetNote = (sh) => `Stable when the last ${sh.L.settleN} readings each change less than ${sh.L.settleDiff} °C · DIFF = change from the previous reading · ${recLabel(sh.every)}`;
@@ -2500,7 +2687,7 @@
   const UI = { brand: "#1f5fbf", brandDark: "#174a96", soft: "#e8f0fc", text: "#0f172a", text2: "#475569", muted: "#64748b", border: "#e2e7ee", band: "#f7f9fb", ok: "#006300", okBg: "#e7f6e7", white: "#ffffff" };
   const SERIES = ["#2a78d6", "#eb6834"], SERIES_SOFT = ["#e3eefb", "#fdeae1"];
   // the graph: both motor sensors over the test, one point per recorded reading
-  function pdfChart(pg, sh, x, y, w, h) {
+  function pdfChart(pg, sh, x, y, w, h, values = false) {
     pg.round(x, y, w, h, 8, { fill: UI.white, stroke: UI.border });
     pg.text(sh.tm, x + 16, y + 24, { size: 12, bold: true, color: UI.text });
     sh.names.forEach((n, j) => { const lx = x + w - 118 + j * 56; pg.dot(lx + 4, y + 20, 4, SERIES[j]); pg.text(n, lx + 12, y + 23, { size: 8.5, bold: true, color: UI.text2 }); });
@@ -2516,7 +2703,24 @@
     pts.forEach((p, i) => { if (i % every && i !== pts.length - 1) return; pg.text(hm(p.t), X(p.t) - 10, P.b + 13, { size: 7.5, color: UI.muted }); });
     // soft areas first (the higher line's area behind), then the lines and a dot on every reading
     [...MS].sort((a, b) => Math.max(...pts.map((p) => p.v[b])) - Math.max(...pts.map((p) => p.v[a]))).forEach((j) => pg.area([[X(t0), P.b], ...pts.map((p) => [X(p.t), Y(p.v[j])]), [X(t1), P.b]], SERIES_SOFT[j]));
-    MS.forEach((j) => { pg.line(pts.map((p) => [X(p.t), Y(p.v[j])]), { color: SERIES[j], lw: 2 }); pts.forEach((p) => pg.dot(X(p.t), Y(p.v[j]), 2.4, UI.white, SERIES[j])); });
+    // short tests: a dot on every reading; long ones: a clean line (the dots would crowd it)
+    const dots = pts.length <= 24;
+    MS.forEach((j) => { pg.line(pts.map((p) => [X(p.t), Y(p.v[j])]), { color: SERIES[j], lw: 2 }); if (dots) pts.forEach((p) => pg.dot(X(p.t), Y(p.v[j]), 2.4, UI.white, SERIES[j])); });
+    if (values) {
+      // about 8 readings spread evenly, always the last: each value in a pill of its line's colour, the hotter line's above it, the other below
+      const n = Math.min(pts.length, 8), idx = [...new Set(Array.from({ length: n }, (_, k) => Math.round((k * (pts.length - 1)) / Math.max(1, n - 1))))];
+      idx.forEach((i) => {
+        const p = pts[i], px = X(p.t), hs = MS.map((j) => ({ j, v: p.v[j], py: Y(p.v[j]) })).sort((a, b) => a.py - b.py);
+        hs.forEach((hh, k) => {
+          if (!dots) pg.dot(px, hh.py, 2.8, UI.white, SERIES[hh.j]);
+          const t = hh.v.toFixed(1), tw = pdfWidth(t, 7, true), bw = tw + 8, bh = 11;
+          const by = k === 0 ? Math.max(P.t + 1, hh.py - bh - 5) : Math.min(P.b - bh - 1, hh.py + 5);
+          const bx = Math.min(Math.max(px - bw / 2, P.l + 1), P.r - bw - 1);
+          pg.round(bx, by, bw, bh, 3.5, { fill: SERIES[hh.j] });
+          pg.text(t, bx + 4, by + 8.2, { size: 7, bold: true, color: UI.white });
+        });
+      });
+    }
     pg.line([[P.l, P.b], [P.r, P.b]], { color: UI.muted, lw: 0.8 });
     pg.text(`Time (At ${sh.every}min)`, x + w / 2 - 30, y + h - 12, { size: 8, bold: true, color: UI.text2 });
     pg.text("Temperature", x + 18, P.b - (P.b - P.t) / 2 + 26, { size: 8, bold: true, color: UI.text2, rot: true });
@@ -2543,7 +2747,7 @@
     const W = 842 - X0 * 2, COLS = 4, CW = W / COLS, CH = 40;
     pg.round(X0, 22, W, 40, 8, { fill: UI.brand });
     pg.text("FULL DETAILS", X0 + 18, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(sh.testId, X0 + 104, 47, { size: 15, bold: true, color: UI.white });
-    pg.text("TM NO", 842 - X0 - 150, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(sh.tm, 842 - X0 - 112, 47, { size: 15, bold: true, color: UI.white });
+    pg.text("STATOR NO", 842 - X0 - 190, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(sh.tm, 842 - X0 - 128, 47, { size: 15, bold: true, color: UI.white });
     const items = sh.details.filter(([k]) => k !== "Reason"), reason = (sh.details.find(([k]) => k === "Reason") || [])[1] || "—";
     const top = 76, rowsN = Math.ceil((items.length + 1) / COLS), lastCol = items.length % COLS;
     const words = String(reason).split(" "), lines = []; // Reason: wrapped to its cell, three lines at most
@@ -2567,28 +2771,52 @@
     lines.slice(0, 3).forEach((l, i) => pg.text(i === 2 && lines.length > 3 ? `${l} …` : l, rx + 10, ry + 30 + i * 11, { size: 9, bold: true, color: UI.text, w: rw + 14 }));
     pg.text(`Generated ${repStamp(Date.now())} · readings ${recLabel(sh.every)}`, X0, top + H + 18, { size: 8, color: UI.muted });
   }
-  function pdfSheets(sheets) {
-    const pages = [], X0 = 28, per = 24;
+  // the test report: ONE page per test with the most important details only — header (stator no., test, date,
+  // result), key facts, the readings table, the calculated results and the graph. Every detail stays in the CSV.
+  function pdfSheets(sheets, opts = {}) {
+    const pages = [], X0 = 28, W = 842 - X0 * 2, MAXR = 19;
+    const RES = { ok: UI.ok, crit: "#b42318", warn: "#b54708", off: UI.muted, stop: UI.text2 };
     sheets.forEach((sh) => {
-      if (sh.details) pdfDetails(sh, X0, pages); // each test: its Full details first, then its sheet (table and graph)
-      const N = sh.names, diff = (r, i, j) => { const ok = !!(i && Math.abs(r.diff[j]) < sh.L.settleDiff); return { t: f1s(r.diff[j]), color: ok ? UI.ok : UI.text2, bold: ok, chip: ok }; };
-      const chunks = []; for (let i = 0; i < Math.max(1, sh.rows.length); i += per) chunks.push(sh.rows.slice(i, i + per));
-      chunks.forEach((rows, ci) => {
-        const pg = pdfPage(); pages.push(pg);
-        // header band: TM NO and DATE
-        pg.round(X0, 22, 842 - X0 * 2, 40, 8, { fill: UI.brand });
-        pg.text("TM NO", X0 + 18, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(sh.tm, X0 + 56, 47, { size: 15, bold: true, color: UI.white });
-        pg.text("DATE", 842 - X0 - 150, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(dmy(sh.start), 842 - X0 - 118, 47, { size: 15, bold: true, color: UI.white });
-        const ty = 76, cols = [{ w: 52 }, { w: 56, right: true }, { w: 50, right: true }, { w: 56, right: true }, { w: 50, right: true }];
-        pdfTable(pg, X0, ty, cols, ["TIME", { t: `${N[0]} °C`, dot: SERIES[0] }, "DIFF", { t: `${N[1]} °C`, dot: SERIES[1] }, "DIFF"],
-          rows.length ? rows.map((r) => { const gi = sh.rows.indexOf(r); return [{ t: hm(r.t), bold: true }, f1s(r.v[0]), diff(r, gi, 0), f1s(r.v[1]), diff(r, gi, 1)]; }) : [["No readings", "", "", "", ""]]);
-        if (ci) return; // the summary and the graph go on the first page of a test
-        const SX = X0 + 264 + 16;
-        const sEnd = pdfTable(pg, SX, ty, [{ w: 206 }, { w: 70, right: true }, { w: 70, right: true }], ["", { t: N[0], dot: SERIES[0] }, { t: N[1], dot: SERIES[1] }],
-          sheetSummary(sh).map(([k, a, b]) => [{ t: k, color: UI.text2 }, { t: a, bold: true }, { t: b, bold: true }]));
-        const gy = sEnd + 14;
-        pdfChart(pg, sh, SX, gy, 842 - SX - X0, Math.max(200, 595 - gy - 24));
+      const pg = pdfPage(); pages.push(pg);
+      const N = sh.names, det = Object.fromEntries(sh.details || []), val = (k) => (det[k] && det[k] !== "—" ? det[k] : "—");
+      // header band: stator no. · test · date · result
+      pg.round(X0, 22, W, 40, 8, { fill: UI.brand });
+      pg.text("STATOR NO", X0 + 18, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(sh.tm, X0 + 80, 47, { size: 15, bold: true, color: UI.white });
+      pg.text("TEST", X0 + 270, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(sh.testId, X0 + 300, 47, { size: 15, bold: true, color: UI.white });
+      pg.text("DATE", X0 + 470, 46, { size: 9, bold: true, color: "#c9dbf6" }); pg.text(dmy(sh.start), X0 + 502, 47, { size: 15, bold: true, color: UI.white });
+      const rt = String(sh.resultText || "—").toUpperCase(), rw = pdfWidth(rt, 10, true) + 22;
+      pg.round(X0 + W - rw - 12, 31, rw, 22, 6, { fill: UI.white });
+      pg.text(rt, X0 + W - rw - 1, 46, { size: 10, bold: true, color: RES[sh.result] || UI.text });
+      // key facts: two rows of four
+      const a0 = sh.rows.length ? sh.rows[0].v[AMB] : null, n = riseLimitOf({ type: sh.known ? sh.type : undefined });
+      const limit = a0 == null ? `ambient at start + ${n} °C` : `${(a0 + n).toFixed(1)} °C (${a0.toFixed(1)} + ${n})`;
+      const devCh = [val("Device"), det.Channel && det.Channel !== "—" ? det.Channel : ""].filter((x) => x && x !== "—").join(" · ") || "—";
+      const facts = [["Motor type", val("Motor type")], ["Device · channel", devCh], ["Started", val("Started")], ["Started by", val("Started by")],
+        ["Test time", val("Monitoring for")], ["Must not exceed", limit], ["Result", sh.resultText || "—"]];
+      const FY = 72, CW = W / 4, RH2 = 26, reason = sh.result === "ok" ? "All checks within limits" : val("Reason");
+      pg.round(X0, FY, W, RH2 * 3 + 8, 6, { fill: UI.band, stroke: UI.border });
+      // the reason gets a full line of its own (it is often long)
+      pg.text("REASON", X0 + 12, FY + 13 + RH2 * 2, { size: 6.8, bold: true, color: UI.muted });
+      pg.text(pdfPlain(reason), X0 + 12, FY + 25 + RH2 * 2, { size: 9, bold: true, color: sh.result === "ok" ? UI.ok : RES[sh.result] || UI.text, w: W - 24 });
+      facts.forEach(([k, v], idx) => {
+        const cx = X0 + 12 + (idx % 4) * CW, cy = FY + 13 + Math.floor(idx / 4) * RH2;
+        pg.text(k.toUpperCase(), cx, cy, { size: 6.8, bold: true, color: UI.muted });
+        pg.text(pdfPlain(v), cx, cy + 12, { size: 9, bold: true, color: k === "Result" ? RES[sh.result] || UI.text : UI.text, w: CW - 16 });
       });
+      // readings: at most MAXR rows (an even selection, first and last kept, when there are more)
+      const all = sh.rows, idx = all.length <= MAXR ? all.map((_, k) => k) : [...new Set(Array.from({ length: MAXR }, (_, k) => Math.round((k * (all.length - 1)) / (MAXR - 1))))];
+      const diff = (r, gi, j) => { const ok = !!(gi && Math.abs(r.diff[j]) < sh.L.settleDiff); return { t: f1s(r.diff[j]), color: ok ? UI.ok : UI.text2, bold: ok, chip: ok }; };
+      const TY = FY + RH2 * 3 + 20, cols = [{ w: 52 }, { w: 56, right: true }, { w: 50, right: true }, { w: 56, right: true }, { w: 50, right: true }];
+      const tEnd = pdfTable(pg, X0, TY, cols, ["TIME", { t: `${N[0]} °C`, dot: SERIES[0] }, "DIFF", { t: `${N[1]} °C`, dot: SERIES[1] }, "DIFF"],
+        all.length ? idx.map((gi) => { const r = all[gi]; return [{ t: hm(r.t), bold: true }, f1s(r.v[0]), diff(r, gi, 0), f1s(r.v[1]), diff(r, gi, 1)]; }) : [["No readings", "", "", "", ""]]);
+      pg.text(all.length > MAXR ? `${idx.length} of ${all.length} readings shown (every reading is in the CSV) · readings every ${sh.every} min` : `Readings every ${sh.every} min · DIFF = change from the previous reading`, X0, tEnd + 12, { size: 7, color: UI.muted });
+      // calculated results, then the graph
+      const SX = X0 + 264 + 16;
+      const sEnd = pdfTable(pg, SX, TY, [{ w: 206 }, { w: 70, right: true }, { w: 70, right: true }], ["", { t: N[0], dot: SERIES[0] }, { t: N[1], dot: SERIES[1] }],
+        sheetSummary(sh).map(([k, a, b]) => [{ t: k, color: UI.text2 }, { t: a, bold: true }, { t: b, bold: true }]));
+      const gy = sEnd + 12;
+      pdfChart(pg, sh, SX, gy, 842 - SX - X0, Math.max(150, 595 - gy - 26), !!opts.values);
+      pg.text(`Generated ${repStamp(Date.now())} · TractionTherm`, X0, 595 - 10, { size: 7, color: UI.muted, align: "right", w: W });
     });
     return pdfFile(pages, `${sheets.length === 1 ? sheets[0].tm : "TractionTherm"} test report`);
   }
@@ -2714,7 +2942,7 @@
       }
       const N = sh.names, top = r;
       // header band across the sheet: TM NO and DATE
-      put(r, 0, "TM NO", "bandLabel"); put(r, 1, sh.tm, "bandValue"); put(r, 2, "", "bandFill"); merges.push(`B${r}:C${r}`);
+      put(r, 0, "STATOR NO", "bandLabel"); put(r, 1, sh.tm, "bandValue"); put(r, 2, "", "bandFill"); merges.push(`B${r}:C${r}`);
       put(r, 3, "DATE", "bandLabel"); put(r, 4, dmy(sh.start), "bandValue"); [5, 6].forEach((k) => put(r, k, "", "bandFill")); merges.push(`E${r}:G${r}`); put(r, 7, "", "bandFill"); put(r, 8, "", "bandFill");
       bandRows.push(r);
       r++; ["TIME", `${N[0]} °C`, "DIFF", `${N[1]} °C`, "DIFF"].forEach((t, k) => put(r, k, t, "label"));
@@ -2781,15 +3009,17 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
   // ----- downloading -----
   // every download asks the file format first: CSV or PDF (the Excel writer above is kept, not offered)
   const FMT_INFO = { pdf: ["report", "PDF", "Print-ready report: details, readings table and graph"], xlsx: ["grid", "Excel", ".xlsx with the graph, ready to edit"], csv: ["grid", "CSV", "Plain table: details, results and every reading"] };
-  function askFormat(title, sub, fmts = ["csv", "pdf"], notes = {}) {
+  // opts.graphValues: a report with a graph — offer "Show values on the graph" for its PDF (the answer is in askFormat.values)
+  function askFormat(title, sub, fmts = ["csv", "pdf"], notes = {}, opts = {}) {
+    askFormat.values = true;
     return new Promise((resolve) => {
       const d = makeDialog("formatDialog", `${dlgHead(title, sub)}
         <div class="modal-body"><div class="fmt-pick">
           ${fmts.map((k) => `<button type="button" class="fmt-btn" data-fmt="${k}">${ico(FMT_INFO[k][0])}<b>${FMT_INFO[k][1]}</b><span>${esc(notes[k] || FMT_INFO[k][2])}</span></button>`).join("")}
-        </div></div>
+        </div>${opts.graphValues && fmts.includes("pdf") ? `<label class="check fmt-opt"><input type="checkbox" id="fmtVals" checked> Show values on the graph <small>· every reading's °C written on the PDF graph</small></label>` : ""}</div>
         <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button></div>`);
       let picked = null;
-      d.querySelector(".fmt-pick").addEventListener("click", (e) => { const b = e.target.closest("[data-fmt]"); if (b) { picked = b.dataset.fmt; d.close(); } });
+      d.querySelector(".fmt-pick").addEventListener("click", (e) => { const b = e.target.closest("[data-fmt]"); if (b) { picked = b.dataset.fmt; const v = d.querySelector("#fmtVals"); askFormat.values = v ? v.checked : true; d.close(); } });
       d.addEventListener("close", () => resolve(picked), { once: true });
       d.showModal();
     });
@@ -2828,12 +3058,6 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
   async function downloadSheets(list, { title, sub, file, what, fmt: chosen = null }) {
     if (!allowed("reports.create")) return;
     if (!list.length) { toast("No tests to report yet"); return; }
-    for (const x of list.filter(({ m }, i, a) => m.untitled && !m.typeSet && a.findIndex((y) => y.m === m) === i)) {
-      const t = await askType(`What type of motor is ${x.m.id}?`, "Its type wasn't chosen when it was switched on · the report uses the type's sensor names and limits");
-      if (!t) return;
-      x.m.type = t; x.m.typeSet = true; saveDevices();
-      logActivity("motor", `Set the motor type of ${x.m.id} to ${MOTOR_TYPES[t].label} (asked before its report)`);
-    }
     // a stopped test without vibration readings: ask for them first (Skip leaves the report without them)
     if (can("monitoring.update")) {
       const missing = list.filter(({ m, r }) => !(r ? r : m).vib && !(!r && isRunning(m)));
@@ -2843,13 +3067,13 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         if (ans === "skipAll") break;
       }
     }
-    const fmt = chosen || (await askFormat(title, sub));
+    const fmt = chosen || (await askFormat(title, sub, undefined, {}, { graphValues: true })), values = chosen ? true : askFormat.values;
     if (!fmt) return;
     const sheets = list.map(({ d, m, r }) => { const sh = testSheet(d, m, r);
       sh.details = sheetDetails(sh, r ? { cur: false, d: DEVICES.find((x) => x.name === r.device) || null, m, r } : { cur: true, d, m, start: m.runStart });
       return sh; });
     if (fmt === "csv") saveCsv(csvSheets(sheets), `${file}-${fileStamp()}.csv`);
-    else saveBlob(fmt === "pdf" ? pdfSheets(sheets) : xlsxSheets(sheets), `${file}-${fileStamp()}.${fmt}`);
+    else saveBlob(fmt === "pdf" ? pdfSheets(sheets, { values }) : xlsxSheets(sheets), `${file}-${fileStamp()}.${fmt}`);
     const n = sheets.length, label = FMT_INFO[fmt][1];
     logActivity("report", `Downloaded ${what} as ${label} · ${n} test${n === 1 ? "" : "s"} (${sheets.map((s) => s.testId).join(", ")})`);
     toast(`Downloaded ${label} · ${n} test${n === 1 ? "" : "s"}`);
@@ -2859,7 +3083,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     const out = [["Report", "TractionTherm test results"], ["Generated", repStamp(Date.now())]];
     sheets.forEach((sh) => {
       const N = sh.names;
-      out.push([], [], ["Test ID", sh.testId], ["TM NO", sh.tm], ["Date", dmy(sh.start)], ["Device", sh.device], ["Result", sh.resultText]);
+      out.push([], [], ["Test ID", sh.testId], ["Stator No.", sh.tm], ["Date", dmy(sh.start)], ["Device", sh.device], ["Result", sh.resultText]);
       out.push([], ["Details"], ...(sh.details || []));
       out.push([], ["Calculated results", N[0], N[1]], ...sheetSummary(sh).map(([k, a, b]) => [k, a, b === undefined ? a : b]));
       out.push([], [`Readings (every ${sh.every} min)`], ["Time", `${N[0]} °C`, `${N[0]} diff`, `${N[1]} °C`, `${N[1]} diff`, "TA °C"],
@@ -2976,7 +3200,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
           <div>
             <div class="crumbs">${esc(d.name)} · ${esc(d.id)}${m.channel ? ` · ${isRunning(m) ? "Channel" : "was channel"} ${m.channel}` : ""} · ${esc(d.location)}</div>
             <h2>${esc(m.id)}</h2>
-            <div class="muted">Test ID <b class="mono test-id">${esc(m.testId || "—")}</b> · ${typeLabel(m)} · ${esc(m.model)} · ${esc(m.loco)} · Stator No. <span class="mono">${esc(m.stator || "—")}</span></div>
+            <div class="muted">Test ID <b class="mono test-id">${esc(m.testId || "—")}</b> · ${typeLabel(m)} · sensors ${pairOf(m)}</div>
           </div>
           <div class="mh-verdict">${statePill(e, d.online, m)}<span>${st === "ok" ? "All checks within limits" : st === "off" ? "Device offline" : st === "stop" ? `Check stopped — last readings shown · result ${VERDICT_SHORT[e.condition]}${hasVib(m.vib) ? ` · vibration ${[0, 1].filter((j) => m.vib[j]).map((j) => `${namesOf(m)[j]} ${vibText(m.vib, j)}`).join(", ")}` : ""}` : esc(reasonOf(e))}</span>${vibBtn(m)}</div>
         </div>
@@ -2989,7 +3213,6 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
           <span class="mh-limits">${limitLine(m)} <a class="link-btn" data-edit-limits href="settings.html#conditions">Edit settings</a></span>
           <span class="mh-actions">
             <span class="mh-trigger">Monitoring ${triggerBtn(m, d)}</span>
-            ${d.online && isRunning(m) && m.channel ? `<button type="button" class="btn btn-sm" data-channel="${esc(m.id)}">${ico("cpu")}Change channel</button>` : ""}
             ${m.testId ? `<button type="button" class="btn btn-sm" data-terminals="${esc(m.id)}">${ico("sliders")}Change terminals</button>` : ""}
             <button type="button" class="btn btn-sm${m.untitled ? " btn-primary" : ""}" data-edit-motor="${esc(m.id)}">${ico("edit")}${m.untitled ? "Add details" : "Edit"}</button>
           </span>
@@ -2998,7 +3221,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       $("#animPill").innerHTML = statePill(e, d.online, m);
       if (scene && !$("#motorLive").hidden) { if (scene.device !== d.id || scene.focus !== m.id) scene.show(d.id, m.id, true); else scene.refresh(); }
       $("#animSub").textContent = isRunning(m) && m.channel
-        ? `${m.id} on ${d.name} ${chLabel(m)} · Wi-Fi, probes and ambient sensor linked to their readings · housing colour = how close the hottest probe is to the limit (red at ${limitsOf(m).crit} °C)`
+        ? `${m.id} on ${d.name} ${chLabel(m)} · Wi-Fi, probes and ambient sensor linked to their readings · housing colour = how close the hottest probe is to the limit (red at ${esc(limitWords(m))})`
         : `${m.id} on ${d.name} · stopped${m.channel ? ` (was ${chLabel(m)})` : ""} · last readings shown · switch it on to start a new run`;
 
       // every test of this motor: the current run first, then the earlier ones (same stator, a new Test ID each run)
@@ -3077,12 +3300,12 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       top.innerHTML = `<div class="mp-head">
           <div class="mp-id"><b class="ch-tag">CH ${c}</b>${channelBtn(m, d)}${terminalBtn(m, d)}<a class="mp-name mono" href="motor.html?motor=${encodeURIComponent(m.id)}">${esc(m.id)}</a></div>
           ${statePill(e, d.online, m)}
-          <div class="mp-meta">${m.untitled ? "Details pending" : esc(m.loco)} · <span class="mono" title="Test ID">${esc(m.testId || "—")}</span> · ${fmtRun(runMinutes(m))}</div>
+          <div class="mp-meta">${m.untitled ? "Details pending" : typeShort(m)} · <span class="mono" title="Test ID">${esc(m.testId || "—")}</span> · ${fmtRun(runMinutes(m))}</div>
           ${triggerBtn(m, d)}
         </div>
         ${overNote(m, e)}
         <div class="dv-about">
-          <span>${m.untitled ? "Details pending" : `${typeLabel(m)} · ${esc(m.model)} · Stator No. <span class="mono">${esc(m.stator || "—")}</span>`}</span>
+          <span>${m.untitled ? "Details pending" : `${typeLabel(m)} · sensors ${pairOf(m)}`}</span>
           <span class="dv-why ${st}">${st === "ok" ? "All checks within limits" : st === "off" ? "Device offline" : esc(reasonOf(e))}</span>${vibBtn(m)}
         </div>
         ${m.untitled ? `<div class="panel-note">${ico("edit")}<span>Reading without motor details</span><button type="button" class="btn btn-sm btn-primary" data-edit-motor="${esc(m.id)}">Add details</button></div>` : ""}
@@ -3159,8 +3382,8 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       $("#dmRows").innerHTML = list.length ? list.map((m) => {
         const e = evalMotor(m), id = esc(m.id);
         return `<tr>
-          <td class="lead-cell" data-label="Motor"><b class="mono">${id}</b><span class="muted stator-no">${m.untitled ? "Details pending" : `Stator No. <span class="mono">${esc(m.stator || "—")}</span>`}</span></td>
-          <td data-label="Model / type" class="col-mid"><div class="cell-stack">${esc(m.model)}<span class="muted cell-sub">${typeLabel(m)} · ${pairOf(m)} · ${esc(m.loco)}</span></div></td>
+          <td class="lead-cell" data-label="Stator No."><b class="mono">${id}</b>${m.untitled ? `<span class="muted stator-no">Details pending</span>` : ""}</td>
+          <td data-label="Motor type" class="col-mid"><div class="cell-stack">${typeLabel(m)}<span class="muted cell-sub">sensors ${pairOf(m)}</span></div></td>
           <td data-label="Channel / test"><div class="cell-stack">${isRunning(m) ? chLabel(m) : m.channel ? `Was ${chLabel(m)}` : "—"}<span class="muted cell-sub mono">${esc(m.testId || "")}</span></div></td>
           ${PROBES.map((p, j) => `<td data-label="${p} °C" class="num${j === AMB ? " col-opt" : ""} ${d.online ? tCls(m.live[j], j, m.live[AMB], m) : "muted"}">${d.online ? m.live[j].toFixed(1) : "—"}</td>`).join("")}
           <td data-label="Condition">${statePill(e, d.online, m)}</td>
@@ -3311,6 +3534,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       DEVICES = JSON.parse(JSON.stringify(DEFAULT_DEVICES)); DEVICES.forEach((d) => d.motors.forEach((m) => seedMotor(m, d))); // seedMotor(m, device), not (m, index)
       SPARE = JSON.parse(JSON.stringify(DEFAULT_SPARE));
       seedHistory(); // with their completed sample tests
+      statorIds(); // the sample motors are listed by their old Motor IDs: their stator numbers are their IDs now
       saveDevices(); saveSpare(); logActivity("device", "Reset the demo devices and motors to the sample data"); toast("Demo data restored"); render();
     });
     render();
@@ -3343,14 +3567,14 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       const rows = all.filter((x) =>
         (devSel.value === "all" || (devSel.value === "none" ? !x.d : x.d && x.d.id === devSel.value)) &&
         (condSel.value === "all" || condOf(x) === condSel.value) &&
-        [x.m.id, x.m.stator, x.m.testId, x.m.model, x.m.loco, x.d ? x.d.name : "not assigned"].join(" ").toLowerCase().includes(term));
+        [x.m.id, x.m.testId, typeLabel(x.m), x.d ? x.d.name : "not assigned"].join(" ").toLowerCase().includes(term));
       $("#motorCount").textContent = `${rows.length} of ${all.length} motors`;
       $("#motorRows").innerHTML = rows.length ? rows.map((x) => {
         const { d, m } = x, cond = condOf(x), live = d && d.online, e = d ? evalMotor(m) : null;
         const id = esc(m.id);
         return `<tr class="motor-row" data-row-motor="${id}" tabindex="0" title="${d ? `Open ${id}'s monitoring` : `${id} details (not on a device yet)`}">
-          <td class="lead-cell" data-label="Motor"><b class="mono">${id}</b><span class="muted stator-no">Stator No. <span class="mono">${esc(m.stator || "—")}</span></span></td>
-          <td data-label="Model / type" class="col-mid"><div class="cell-stack">${esc(m.model)}<span class="muted cell-sub">${typeLabel(m)} · ${pairOf(m)} · ${esc(m.loco)}</span></div></td>
+          <td class="lead-cell" data-label="Stator No."><b class="mono">${id}</b></td>
+          <td data-label="Motor type" class="col-mid"><div class="cell-stack">${typeLabel(m)}<span class="muted cell-sub">sensors ${pairOf(m)}</span></div></td>
           <td data-label="Device"><span>${d ? `${esc(d.name)}${isRunning(m) && m.channel ? ` · ${chLabel(m)}` : ""}<span class="muted cell-sub mono">${esc(m.testId || "")}</span>` : `<span class="muted">Not assigned</span> <button type="button" class="link-btn" data-assign-motor="${id}">Assign</button>`}</span></td>
           ${PROBES.map((p, j) => `<td data-label="${p} °C" class="num${j === AMB ? " col-opt" : ""} ${live ? tCls(m.live[j], j, m.live[AMB], m) : "muted"}">${live ? m.live[j].toFixed(1) : "—"}</td>`).join("")}
           <td data-label="Predicted final" class="num col-opt">${live && e.th && e.th.confident ? e.th.finalTemp.toFixed(1) + " °C" : "—"}</td>
@@ -3394,10 +3618,10 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
      ========================================================= */
   function pageSettings() {
     const editable = can("limits.update"), L = () => LIM.AC; // one set for both motor types
-    const F = { maxHours: $("#set-hours"), every: $("#set-every"), settleN: $("#set-n"), settleDiff: $("#set-diff"), crit: $("#set-crit") };
-    const LBL = { maxHours: "maximum test hours", every: "interval time", settleN: "readings", settleDiff: "change less than", crit: "temperature must not exceed" };
-    const UNIT = { maxHours: " h", every: " min", settleN: "", settleDiff: " °C", crit: " °C" };
-    const saved = () => ({ maxHours: L().maxHours, every: REC.every, settleN: L().settleN, settleDiff: L().settleDiff, crit: L().crit, vib: VIB.ask });
+    const F = { maxHours: $("#set-hours"), every: $("#set-every"), settleN: $("#set-n"), settleDiff: $("#set-diff"), rateN: $("#set-rate-n"), rateMax: $("#set-rate-max"), riseAC: $("#set-rise-ac"), riseDC: $("#set-rise-dc") };
+    const LBL = { maxHours: "maximum test hours", every: "interval time", settleN: "readings", settleDiff: "change less than", rateN: "rate of change readings", rateMax: "rate of change must not exceed", riseAC: "three-phase limit (ambient at start +)", riseDC: "conventional limit (ambient at start +)" };
+    const UNIT = { maxHours: " h", every: " min", settleN: "", settleDiff: " °C", rateN: "", rateMax: " °C", riseAC: " °C", riseDC: " °C" };
+    const saved = () => ({ maxHours: L().maxHours, every: REC.every, settleN: L().settleN, settleDiff: L().settleDiff, rateN: L().rateN, rateMax: L().rateMax, riseAC: L().riseAC, riseDC: L().riseDC, vib: VIB.ask });
     const read = () => ({ ...Object.fromEntries(Object.entries(F).map(([k, el]) => [k, parseFloat(el.value)])), vib: $("#vibAsk").checked });
     const show = (v) => { Object.entries(F).forEach(([k, el]) => (el.value = v[k])); $("#vibAsk").checked = v.vib; };
     const err = $("#setError"), fail = (m) => { err.textContent = m; err.classList.add("show"); };
@@ -3407,7 +3631,11 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (!validRec(v.every)) return `Interval time: a whole number of minutes from ${REC_MIN} to ${REC_MAX}.`;
       if (!Number.isInteger(v.settleN) || v.settleN < 2 || v.settleN > 20) return "Last how many readings: a whole number from 2 to 20.";
       if (!(v.settleDiff >= 0.1 && v.settleDiff <= 10)) return "Change less than: from 0.1 to 10 °C.";
-      if (!(v.crit >= 20 && v.crit <= 250)) return "Temperature must not exceed: from 20 to 250 °C.";
+      if (!Number.isInteger(v.rateN) || v.rateN < 2 || v.rateN > 20) return "Rate of change · last how many readings: a whole number from 2 to 20.";
+      if (!(v.rateMax >= 0.1 && v.rateMax <= 20)) return "Rate of change · must not exceed: from 0.1 to 20 °C.";
+      if ((v.rateN - 1) * v.every > v.maxHours * 60) return `${v.rateN} readings every ${v.every} min take ${fmtRun((v.rateN - 1) * v.every)}, longer than the maximum ${hoursText(v.maxHours)}: no test could become Stable. Lower the readings or the interval, or raise the maximum hours.`;
+      if (!(v.riseAC >= 1 && v.riseAC <= 150)) return "Three-phase · must not exceed ambient at start +: from 1 to 150 °C.";
+      if (!(v.riseDC >= 1 && v.riseDC <= 150)) return "Conventional · must not exceed ambient at start +: from 1 to 150 °C.";
       if (v.settleN * v.every > v.maxHours * 60) return `${v.settleN} readings every ${v.every} min take ${fmtRun(v.settleN * v.every)}, longer than the maximum ${hoursText(v.maxHours)}: no test could become Stable. Lower the readings or the interval, or raise the maximum hours.`;
       return null;
     };
@@ -3417,8 +3645,8 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       const ok = !check(v), x = ok ? v : sv; // the rules below show the values being typed while they are valid
       $("#setRules").innerHTML = `
         <div><span>${verdictPill("warn")}</span><p>While the test runs and the temperatures haven't settled yet.</p></div>
-        <div><span>${verdictPill("ok")}</span><p>The last <b>${x.settleN}</b> readings (every ${x.every} min) each change less than <b>${x.settleDiff} °C</b>, within <b>${hoursText(x.maxHours)}</b>.</p></div>
-        <div><span>${verdictPill("crit")}</span><p>The hotter motor sensor goes above <b>${x.crit} °C</b>, or <b>${hoursText(x.maxHours)}</b> pass without settling.</p></div>`;
+        <div><span>${verdictPill("ok")}</span><p>The last <b>${x.settleN}</b> readings (every ${x.every} min) each change less than <b>${x.settleDiff} °C</b>, and over the last <b>${x.rateN}</b> readings the highest minus the lowest is no more than <b>${x.rateMax} °C</b>, within <b>${hoursText(x.maxHours)}</b>.</p></div>
+        <div><span>${verdictPill("crit")}</span><p>The hotter motor sensor goes above the ambient at the test start + <b>${x.riseAC} °C</b> (three-phase) / + <b>${x.riseDC} °C</b> (conventional), or <b>${hoursText(x.maxHours)}</b> pass without settling.</p></div>`;
       const live = liveMotors().map(({ m }) => ({ m, e: evalMotor(m) }));
       $("#setLive").innerHTML = !live.length ? "No motors running right now." : "Live now: " + live.map(({ m, e }) =>
         `<b class="mono">${esc(m.id)}</b> ${VERDICT_SHORT[e.status]} · ${fmtRun(e.runMin)} of ${hoursText(L().maxHours)} · ${e.settle.ok ? "settled" : e.settle.maxd == null ? `${e.settle.have} of ${e.settle.need} readings` : `largest change ${e.settle.maxd.toFixed(1)} °C`} · highest ${e.peak.toFixed(1)} °C`).join(" · ");
@@ -3434,7 +3662,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       const sv = saved();
       const changes = Object.keys(F).filter((k) => v[k] !== sv[k]).map((k) => `${LBL[k]} ${sv[k]}${UNIT[k]} → ${v[k]}${UNIT[k]}`);
       if (v.vib !== sv.vib) changes.push(`vibration readings: ${v.vib ? "ask when a motor is stopped" : "don't ask when a motor is stopped"}`);
-      Object.assign(L(), { maxHours: v.maxHours, settleN: v.settleN, settleDiff: v.settleDiff, crit: v.crit }); saveLimits(); // LIM.AC is the set for both types
+      Object.assign(L(), { maxHours: v.maxHours, settleN: v.settleN, settleDiff: v.settleDiff, rateN: v.rateN, rateMax: v.rateMax, riseAC: v.riseAC, riseDC: v.riseDC }); saveLimits(); // LIM.AC is the set for both types
       REC.every = v.every; store.set(REC_KEY, { every: v.every });
       VIB.ask = v.vib; store.set(VIB_KEY, { ask: VIB.ask });
       logActivity("limits", `Saved test settings — ${changes.join("; ")}`);
@@ -3481,13 +3709,13 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     const term = () => f.search.value.trim().toLowerCase();
     // search in one chosen field ("Search in") or across all of them
     const matches = (fields) => !term() || (f.sin.value === "all" ? Object.values(fields) : [fields[f.sin.value]]).join(" ").toLowerCase().includes(term());
-    const SEARCH_PH = { all: null, test: "e.g. TEST-0003", motor: "e.g. TM-4471", stator: "e.g. ST-60681", model: "e.g. 6FRA 6068", loco: "e.g. WAG-9", device: "Device name or ID, e.g. Device A", location: "e.g. Bay 3", reason: `e.g. rise, ${PAIR}, terminal`, time: "e.g. 29 Oct or 14:30" };
+    const SEARCH_PH = { all: null, test: "e.g. TEST-0003", motor: "e.g. ST-60681", type: "Three-phase or Conventional", user: "e.g. Arun Prakash", device: "Device name or ID, e.g. Device A", location: "e.g. Bay 3", reason: `e.g. rise, ${PAIR}, terminal`, time: "e.g. 29 Oct or 14:30" };
     const syncSearch = () => {
       const log = f.type.value === "readings";
       $$("option[data-summary-only]", f.sin).forEach((o) => (o.disabled = log));
       $$("option[data-readings-only]", f.sin).forEach((o) => (o.disabled = !log));
       if (f.sin.selectedOptions[0].disabled) f.sin.value = "all";
-      f.search.placeholder = SEARCH_PH[f.sin.value] || (log ? "Search motor, test ID, device or reading time" : "Search test ID, motor, stator no., model, locomotive, device, location or reason");
+      f.search.placeholder = SEARCH_PH[f.sin.value] || (log ? "Search stator no., test ID, device or reading time" : "Search test ID, stator no., motor type, started by, device, location or reason");
     };
     // predicted rise, motor comparison and probe faults only exist for the summary
     const syncCtype = () => {
@@ -3500,7 +3728,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     };
     const LIMIT_TEXT = { ok: "Within limit", crit: "Above limit" };
     const defaults = () => {
-      f.type.value = "summary"; f.cond.value = "all"; f.ctype.value = "all"; f.search.value = ""; f.sin.value = "all"; f.range.value = "60"; f.interval.value = String(REC.every);
+      f.type.value = "summary"; f.cond.value = "all"; f.ctype.value = "all"; f.search.value = ""; f.from.value = ""; f.to.value = ""; f.sin.value = "all"; f.range.value = "60"; f.interval.value = String(REC.every);
       f.device.innerHTML = `<option value="all">All devices</option>` + DEVICES.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.id)})</option>`).join("");
       f.device.value = "all"; fillMotors(); f.motor.value = "all";
     };
@@ -3530,51 +3758,50 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     const TEXT_OPS = { has: "contains", is: "is", starts: "starts with" };
     const runMin = (s) => { const h = /(\d+)\s*h/.exec(s || ""), mm = /(\d+)\s*min/.exec(s || ""); return h || mm ? (h ? +h[1] * 60 : 0) + (mm ? +mm[1] : 0) : NaN; };
     // col: the report column a field reads — one name for both reports, or { summary, readings } where they differ / it exists in one only
-    const RULE_GROUPS = [["temp", "Temperatures", "thermo"], ["status", "Status", "activity"], ["motor", "Motor & test", "motor"]];
+    const RULE_GROUPS = [["test", "Test", "report"], ["result", "Result", "activity"]];
+    const DATE_OPS = { on: "is on", before: "is before", after: "is after", between: "is between" };
+    // the rule fields are the Results table's columns
     const RULE_FIELDS = [
-      { k: "rise", g: "temp", label: "Rise above ambient", unit: "°C", col: { summary: "Rise °C", readings: "Max rise °C" } },
-      { k: "hot", g: "temp", label: `Hottest probe (${T1N} or ${T2N})`, unit: "°C", get: (v) => Math.max(parseFloat(v(`${T1N} °C`)), parseFloat(v(`${T2N} °C`))) },
-      { k: "de", g: "temp", label: `${T1N} · ${PROBE_NAME[T1N]}`, unit: "°C", col: `${T1N} °C` },
-      { k: "nde", g: "temp", label: `${T2N} · ${PROBE_NAME[T2N]}`, unit: "°C", col: `${T2N} °C` },
-      { k: "ta", g: "temp", label: "TA · ambient air", unit: "°C", col: "TA °C" },
-      { k: "spread", g: "temp", label: DIFF_NAME, unit: "°C", col: `${PAIR} Δ °C` },
-      { k: "pred", g: "temp", label: "Predicted final temperature", unit: "°C", col: { summary: "Predicted final °C" } },
-      { k: "cond", g: "status", label: "Condition", pick: ["Stable", "Unstable"], col: { summary: "Condition", readings: "Status" } },
-      { k: "ctype", g: "status", label: "Condition type", pick: Object.values(CTYPE_NAME), types: true },
-      { k: "eq", g: "status", label: "Temperature settled", pick: ["Yes", "Not yet"], col: { summary: "Settled" } },
-      { k: "run", g: "status", label: "Monitoring time", unit: "min", col: { summary: "Monitoring for" }, parse: runMin },
-      { k: "motor", g: "motor", label: "Motor ID", col: "Motor", ph: "e.g. TM-4471" },
-      { k: "test", g: "motor", label: "Test ID", col: "Test ID", ph: "e.g. TEST-0003" },
-      { k: "stator", g: "motor", label: "Stator No.", col: { summary: "Stator No." }, ph: "e.g. ST-60681" },
-      { k: "model", g: "motor", label: "Model / type", col: { summary: "Model / type" }, ph: "e.g. 6FRA 6068" },
-      { k: "loco", g: "motor", label: "Locomotive", col: { summary: "Locomotive" }, ph: "e.g. WAG-9" },
-      { k: "device", g: "motor", label: "Device", col: "Device", ph: "e.g. Device A" },
-      { k: "location", g: "motor", label: "Location", col: { summary: "Location" }, ph: "e.g. Bay 3" }
+      { k: "test", g: "test", label: "Test ID", col: "Test ID", ph: "e.g. TEST-0003" },
+      { k: "motor", g: "test", label: "Stator No.", col: "Stator No.", ph: "e.g. ST-60681" },
+      { k: "started", g: "test", label: "Started", date: true },
+      { k: "by", g: "test", label: "Started by", col: "Started by", ph: "e.g. Arun" },
+      { k: "run", g: "test", label: "Monitoring for", unit: "min", col: "Monitoring for", parse: runMin },
+      { k: "device", g: "test", label: "Device · channel", get: (v) => `${v("Device") || ""} · ${v("Channel") || ""}`, text: true, ph: "e.g. Device A · CH 1" },
+      { k: "cond", g: "result", label: "Condition", pick: ["Stable", "Unstable"], col: "Condition" },
+      { k: "raise1", g: "result", label: `Raise ${T1N} (${PROBE_NAME[T1N]})`, unit: "°C", col: `Temp raise ${T1N} °C` },
+      { k: "raise2", g: "result", label: `Raise ${T2N} (${PROBE_NAME[T2N]})`, unit: "°C", col: `Temp raise ${T2N} °C` }
     ];
     const fieldOf = (k) => RULE_FIELDS.find((x) => x.k === k);
     const colOf = (fd) => (typeof fd.col === "string" ? fd.col : fd.col && fd.col[f.type.value]);
-    const available = (fd) => (fd.get || fd.types ? true : !!colOf(fd));
-    const opsOf = (fd) => (fd.unit ? TEMP_OPS : fd.pick ? PICK_OPS : TEXT_OPS);
-    const newRule = (k, extra = {}) => { const fd = fieldOf(k); return { k, op: fd.unit ? "ge" : fd.pick ? "is" : "has", val: fd.pick ? fd.pick[0] : "", val2: "", ...extra }; };
+    const available = (fd) => (fd.get || fd.date || fd.types ? true : !!colOf(fd));
+    const opsOf = (fd) => (fd.date ? DATE_OPS : fd.unit ? TEMP_OPS : fd.pick ? PICK_OPS : TEXT_OPS);
+    const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+    const newRule = (k, extra = {}) => { const fd = fieldOf(k); return { k, join: "and", op: fd.date ? "on" : fd.unit ? "ge" : fd.pick ? "is" : "has", val: fd.pick ? fd.pick[0] : fd.date ? today() : "", val2: "", ...extra }; };
     const QUICK = () => [
-      { label: `Hottest probe above ${LIM.AC.crit} °C`, tag: "not ok", r: newRule("hot", { op: "gt", val: String(LIM.AC.crit) }) },
       { label: "Unstable only", tag: "crit", r: newRule("cond", { val: "Unstable" }) },
-      { label: "Not settled in time", tag: "crit", r: newRule("ctype", { val: CTYPE_NAME.hours }) },
-      { label: "Not settled yet", r: newRule("eq", { val: "Not yet" }) },
+      { label: "Stable only", r: newRule("cond", { val: "Stable" }) },
+      { label: "Started today", r: newRule("started", { val: today() }) },
       { label: "Monitored over 1 h", r: newRule("run", { val: "60" }) }
     ];
     const sameRule = (a, b) => a.k === b.k && a.op === b.op && String(a.val) === String(b.val) && String(a.val2 || "") === String(b.val2 || "");
     let report = null, rules = [], rulesSig = "";
-    const matchAny = () => f.ruleMode.value === "any";
     const ruleActive = (r) => {
       const fd = fieldOf(r.k);
       if (!available(fd)) return false;
       if (fd.pick) return true;
+      if (fd.date) return !!r.val && (r.op !== "between" || !!r.val2);
       if (fd.unit) return isFinite(parseFloat(r.val)) && (r.op !== "between" || isFinite(parseFloat(r.val2)));
       return r.val.trim() !== "";
     };
-    function ruleTest(r, cells, types) {
+    function ruleTest(r, cells, types, when) {
       const fd = fieldOf(r.k), v = (name) => cells[report.cols.indexOf(name)];
+      // dates: a whole day (local time) — on, before, after, between (both days included)
+      if (fd.date) {
+        const day = (s) => { const [y, mo, d] = String(s).split("-").map(Number); return new Date(y, mo - 1, d).getTime(); }, DAY = 86400000;
+        const a = day(r.val), b = r.val2 ? day(r.val2) : a;
+        return { on: when >= a && when < a + DAY, before: when < a, after: when >= a + DAY, between: when >= Math.min(a, b) && when < Math.max(a, b) + DAY }[r.op];
+      }
       // condition type: is that check out of limits on this row
       if (fd.types) return types.some((t) => CTYPE_NAME[t] === r.val) === (r.op === "is");
       const raw = fd.get ? fd.get(v) : v(colOf(fd));
@@ -3587,9 +3814,11 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (fd.pick) return (x === t) === (r.op === "is");
       return { has: x.includes(t), is: x === t, starts: x.startsWith(t) }[r.op];
     }
-    const ruleMatch = ({ cells, types }) => { const act = rules.filter(ruleActive), t = (r) => ruleTest(r, cells, types); return !act.length || (matchAny() ? act.some(t) : act.every(t)); };
-    const ruleLabel = (r) => { const fd = fieldOf(r.k), u = fd.unit ? ` ${fd.unit}` : ""; return `${fd.label} ${opsOf(fd)[r.op]} ${r.op === "between" ? `${r.val}–${r.val2}${u}` : `${fd.pick ? r.val : fd.unit ? r.val : `"${r.val.trim()}"`}${u}`}`; };
-    const condText = () => rules.filter(ruleActive).map(ruleLabel).join(matchAny() ? " or " : " and ");
+    // each rule after the first joins the one before with AND or OR; AND is grouped first: "A and B or C" = (A and B) or C
+    const ruleGroups = () => rules.filter(ruleActive).reduce((g, r, i) => { if (i && r.join === "or") g.push([r]); else g[g.length - 1].push(r); return g; }, [[]]).filter((g) => g.length);
+    const ruleMatch = ({ cells, types, t }) => { const gs = ruleGroups(); return !gs.length || gs.some((g) => g.every((r) => ruleTest(r, cells, types, t))); };
+    const ruleLabel = (r) => { const fd = fieldOf(r.k), u = fd.unit ? ` ${fd.unit}` : ""; return `${fd.label} ${opsOf(fd)[r.op]} ${r.op === "between" ? `${r.val}–${r.val2}${u}` : `${fd.pick || fd.date || fd.unit ? r.val : `"${r.val.trim()}"`}${u}`}`; };
+    const condText = () => ruleGroups().map((g) => g.map(ruleLabel).join(" AND ")).join(" OR ");
     // (re)draw the rules only when they change, so typing in a value keeps its focus
     function drawChips() {
       const quick = QUICK().filter((q) => available(fieldOf(q.r.k)));
@@ -3607,22 +3836,23 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       const groupIco = Object.fromEntries(RULE_GROUPS.map(([g, , i]) => [g, i]));
       $("#ruleRows").innerHTML = rules.length ? rules.map((r, i) => {
         const fd = fieldOf(r.k), ok = available(fd), ops = opsOf(fd);
-        const valIn = (key, val, label) => fd.unit
+        const valIn = (key, val, label) => fd.date
+          ? `<input class="input rule-v" data-key="${key}" type="date" value="${esc(val)}" aria-label="${label}">`
+          : fd.unit
           ? `<div class="input-unit"><input class="input num rule-v" data-key="${key}" type="number" step="any" inputmode="decimal" value="${esc(val)}" placeholder="0" aria-label="${label}"><span>${fd.unit}</span></div>`
           : `<input class="input rule-v" data-key="${key}" type="text" value="${esc(val)}" placeholder="${esc(fd.ph || "Value")}" aria-label="${label}" autocomplete="off">`;
         const value = fd.pick
           ? `<select class="select rule-v" data-key="val" aria-label="${esc(fd.label)}">${fd.pick.map((p) => `<option${p === r.val ? " selected" : ""}${fd.types && f.type.value === "readings" && [CTYPE_NAME.pred, CTYPE_NAME.partner, CTYPE_NAME.probe].includes(p) ? " disabled" : ""}>${p}</option>`).join("")}</select>`
           : r.op === "between" ? `<div class="rule-between">${valIn("val", r.val, "From")}<span>and</span>${valIn("val2", r.val2, "To")}</div>` : valIn("val", r.val, "Value");
         return `<div class="rule-row${ok ? "" : " is-na"}" data-i="${i}">
-          <span class="rule-ico rule-${fd.g}" aria-hidden="true">${ico(groupIco[fd.g])}</span>
+          ${i ? `<select class="select rule-join" aria-label="Rule ${i + 1}: AND or OR with the rule above"><option value="and"${r.join !== "or" ? " selected" : ""}>AND</option><option value="or"${r.join === "or" ? " selected" : ""}>OR</option></select>` : `<span class="rule-where">Where</span>`}
           <select class="select rule-field" aria-label="Rule ${i + 1}: what to check">${RULE_GROUPS.map(([g, gl]) => `<optgroup label="${gl}">${RULE_FIELDS.filter((x) => x.g === g).map((x) => `<option value="${x.k}"${x.k === r.k ? " selected" : ""}${available(x) ? "" : " disabled"}>${esc(x.label)}</option>`).join("")}</optgroup>`).join("")}</select>
           <select class="select rule-op" aria-label="Comparison">${Object.entries(ops).map(([k, t]) => `<option value="${k}"${k === r.op ? " selected" : ""}>${t}</option>`).join("")}</select>
           <div class="rule-val">${value}</div>
           <button type="button" class="btn btn-ghost" data-rule-del aria-label="Remove rule ${i + 1}" title="Remove rule">${ico("x")}</button>
-          ${ok ? "" : `<p class="rule-na">Not part of the ${f.type.selectedOptions[0].text.split(" (")[0].toLowerCase()} — ignored here.</p>`}
+          ${ok ? "" : `<p class="rule-na">Not part of this list — ignored here.</p>`}
         </div>`;
       }).join("") : `<p class="rule-empty">No custom rules — every row that passes the filters above is shown. Tap a quick rule or add your own.</p>`;
-      $("#ruleModeBox").hidden = rules.length < 2; // all / any only matters with two or more rules
       $("#ruleClear").hidden = !rules.length;
     }
 
@@ -3638,17 +3868,24 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     }
     // the full row of every test (all columns), for the opened test's details
     let lastFull = new Map(), lastCols = [];
+    // From / To date: tests started on those days (local time, both days included; a From after To is swapped)
+    const dayStart = (v) => { const [y, mo, d] = String(v).split("-").map(Number); return new Date(y, mo - 1, d).getTime(); };
+    const dateRange = () => { let a = f.from.value ? dayStart(f.from.value) : -Infinity, b = f.to.value ? dayStart(f.to.value) + 86400000 : Infinity;
+      if (a > b - 86400000 && isFinite(a) && isFinite(b)) [a, b] = [b - 86400000, a + 86400000]; return [a, b]; };
+    const inDates = (t) => { const [a, b] = dateRange(); return t >= a && t < b; };
+    const dmyIn = (v) => (v ? dmy(dayStart(v)) : "");
     // build the report rows for the current filters: one row per test
     function build() {
       const statusOf = ({ d, m }) => (d.online ? evalMotor(m).status : "off");
       if (f.type.value === "summary") {
-        const full = allTests().map((t) => testRow(t, testSheet(t.d, t.m, t.cur ? null : t.r)));
+        const full = allTests().map((t) => { const sh = testSheet(t.d, t.m, t.cur ? null : t.r); return { ...testRow(t, sh), names: sh.names }; });
         lastFull = new Map(full.map((x) => [x.cells[0], x]));
         const rows = full.filter((row, i, a) => {
           if (f.cond.value !== "all" && row.status !== f.cond.value) return false;
           if (f.ctype.value !== "all" && !row.types.includes(f.ctype.value)) return false;
+          if (!inDates(row.t)) return false;
           const c = row.cells;
-          return matches({ test: c[0], motor: c[1], stator: c[2], model: c[3], loco: c[4], device: `${c[5]} ${(DEVICES.find((x) => x.name === c[5]) || {}).id || ""}`, location: c[7], reason: row.reason });
+          return matches({ test: c[0], motor: c[1], type: c[2], device: `${c[3]} ${(DEVICES.find((x) => x.name === c[3]) || {}).id || ""}`, location: c[5], user: c[7], reason: row.reason });
         }).sort((a, b) => b.t - a.t);
         const cols = TEST_COLS;
         lastCols = cols;
@@ -3663,9 +3900,9 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         recorded(pts, x.cur ? m.runStart : x.r.start, every).forEach((p) => {
           if (p.t < from) return;
           const hot = hotOf(p.v), rise = hot - p.v[AMB], spread = spreadOf(p.v);
-          const rec = x.cur ? m : x.r.type ? x.r : m, RL = limitsOf(rec);
+          const rec = x.cur ? m : x.r.type ? x.r : m, RLim = tempLimitOf(x.cur ? m : { readings: x.r.readings }, typeOf(rec));
           // one reading is Unstable when the hotter motor sensor is above the temperature limit
-          const lv = { temp: hot > RL.crit ? "crit" : "ok" }, s = lv.temp;
+          const lv = { temp: hot > RLim ? "crit" : "ok" }, s = lv.temp;
           if (f.cond.value !== "all" && s !== f.cond.value) return;
           if (f.ctype.value !== "all" && (lv[f.ctype.value] || "ok") === "ok") return;
           if (!matches({ motor: m.id, test: tid, device: `${dev} ${devId}`, time: stamp(p.t) })) return;
@@ -3673,9 +3910,10 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         });
       });
       rows.sort((a, b) => a.t - b.t || a.cells[2].localeCompare(b.cells[2]));
-      return { title: "Temperature readings", cols: ["Test ID", "Time", "Motor", "Device", "Channel", ...PROBES.map((p) => `${p} °C`), "Max rise °C", `${PAIR} Δ °C`, "Limit check"], num: Array.from({ length: PROBES.length + 2 }, (_, i) => 5 + i), statusCol: 5 + PROBES.length + 2, motorCol: 2, rows };
+      return { title: "Temperature readings", cols: ["Test ID", "Time", "Stator No.", "Device", "Channel", ...PROBES.map((p) => `${p} °C`), "Max rise °C", `${PAIR} Δ °C`, "Limit check"], num: Array.from({ length: PROBES.length + 2 }, (_, i) => 5 + i), statusCol: 5 + PROBES.length + 2, motorCol: 2, rows };
     }
     const filterText = () => [
+      ...(f.from.value || f.to.value ? [`Dates: ${f.from.value ? dmyIn(f.from.value) : "any"} to ${f.to.value ? dmyIn(f.to.value) : "any"}`] : []),
       `Device: ${f.device.selectedOptions[0].text}`, `Motor: ${f.motor.selectedOptions[0].text}`, `Condition: ${f.cond.selectedOptions[0].text}`,
       ...(f.ctype.value !== "all" ? [`Condition type: ${f.ctype.selectedOptions[0].text}`] : []),
       ...(term() ? [`Search${f.sin.value === "all" ? "" : ` in ${f.sin.selectedOptions[0].text}`}: "${f.search.value.trim()}"`] : []),
@@ -3706,6 +3944,9 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
         <div class="actions"><a class="btn btn-primary" href="motor.html?motor=${encodeURIComponent(mx.m.id)}">${ico("activity")}Open ${esc(mx.m.id)} live</a><a class="btn" href="monitor.html">${ico("grid")}Monitor</a></div>`;
       // one test opened: its own page · no filters, the results table below is its motor's history
       $("#repFilters").hidden = !!shownTest;
+      // a motor without details has just this one test: no result history (it would only list this same test)
+      const oneTest = !!(shownTest && mx.m.untitled);
+      $("#repTableCard").hidden = oneTest; $("#repSummary").hidden = oneTest;
       $("#repCsvHist").hidden = !shownTest;
       $("#repBack").hidden = !backOk || !!shownTest;
       // the test opened from Test history or a Test ID: its graphs, above the filters
@@ -3721,16 +3962,19 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (shownTest && scrollTest) { scrollTest = false; requestAnimationFrame(() => $("#repTestCard").scrollIntoView({ block: "start" })); }
       $("#repTitle").textContent = shownTest ? `Result history · ${mx.m.id}` : report.title;
       $("#repMeta").textContent = `${filterText().join(" · ")} · data as of ${new Date().toLocaleTimeString()}`;
-      $("#repPrintHead").innerHTML = `<h2>TractionTherm · ${esc(report.title)}</h2><p>Generated ${esc(stamp(Date.now()))} · ${esc(filterText().join(" · "))}</p><p>Test settings: maximum ${hoursText(LIM.AC.maxHours)} · readings ${recLabel()} · Stable when the last ${LIM.AC.settleN} readings each change less than ${LIM.AC.settleDiff} °C within the maximum hours · Unstable above ${LIM.AC.crit} °C or when not settled in time</p>`;
+      $("#repPrintHead").innerHTML = `<h2>TractionTherm · ${esc(report.title)}</h2><p>Generated ${esc(stamp(Date.now()))} · ${esc(filterText().join(" · "))}</p><p>Test settings: maximum ${hoursText(LIM.AC.maxHours)} · readings ${recLabel()} · Stable when the last ${LIM.AC.settleN} readings each change less than ${LIM.AC.settleDiff} °C within the maximum hours · Unstable above ${riseRuleText()} or when not settled in time</p>`;
       // on screen each row also gets Download / Edit (not part of the download)
       // the key columns on screen, the result first (State is left out: Results lists completed tests only); the CSV keeps every column
       const KEY_COLS = KEY_COLS_PDF; // channel shown with the device
       const show = report.title === "Test results" ? KEY_COLS.map((c) => report.cols.indexOf(c)).filter((i) => i >= 0) : report.cols.map((c, i) => i);
-      const chCol = report.title === "Test results" ? report.cols.indexOf("Channel") : -1, colCls = (i) => (report.cols[i] === "Model / type" ? " col-model" : "");
-      $("#repHead").innerHTML = `<tr>${show.map((i) => `<th class="${report.num.includes(i) ? "num" : ""}${colCls(i)}">${esc(chCol >= 0 && report.cols[i] === "Device" ? "Device · channel" : report.cols[i])}</th>`).join("")}<th class="num rep-act-h">Actions</th></tr>`;
+      const chCol = report.title === "Test results" ? report.cols.indexOf("Channel") : -1, colCls = (i) => (report.cols[i] === "Motor type" ? " col-model" : /^Temp raise T[12] °C$/.test(report.cols[i]) ? " col-raise" : "");
+      // Temp raise per sensor: heading "Raise T1 °C", each cell "DE (T1) 22.5" with the motor's own sensor name
+      const raiseK = (i) => { const k = /^Temp raise T([12]) °C$/.exec(report.cols[i]); return k ? +k[1] - 1 : -1; };
+      const headOf = (i) => (chCol >= 0 && report.cols[i] === "Device" ? "Device · channel" : raiseK(i) >= 0 ? `Raise T${raiseK(i) + 1} °C` : report.cols[i]);
+      $("#repHead").innerHTML = `<tr>${show.map((i) => `<th class="${report.num.includes(i) ? "num" : ""}${colCls(i)}"${raiseK(i) >= 0 ? ` title="How far ${raiseK(i) ? "NDE / CE" : "DE / PE"} (T${raiseK(i) + 1}) ended above the ambient temperature"` : ""}>${esc(headOf(i))}</th>`).join("")}<th class="num rep-act-h">Actions</th></tr>`;
       $("#repRows").innerHTML = report.rows.length ? report.rows.map((r) => {
         const id = r.cells[report.motorCol], tid = r.cells[report.cols.indexOf("Test ID")];
-        return `<tr class="${tid ? "rep-row" : ""}${tid && tid === openTest ? " rep-open" : ""}"${tid ? ` title="Open the full details of ${esc(tid)}"` : ""}>${show.map((i) => [chCol >= 0 && report.cols[i] === "Device" && r.cells[chCol] ? `${r.cells[i]} · ${r.cells[chCol]}` : r.cells[i], i]).map(([v, i]) => `<td data-label="${esc(chCol >= 0 && report.cols[i] === "Device" ? "Device · channel" : report.cols[i])}" class="${i === 0 ? "lead-cell" : report.num.includes(i) ? "num" : ""}${colCls(i)}">${i === report.statusCol ? (report.title === "Test results" ? verdictPill(r.status) : `<span class="badge ${r.status === "crit" ? "crit" : "ok"}">${LIMIT_TEXT[r.status] || esc(v)}</span>`) : i === 0 && v ? testLink(id, v) : i === report.motorCol ? `<span class="mono">${esc(v)}</span>` : esc(v || "—")}</td>`).join("")}
+        return `<tr class="${tid ? "rep-row" : ""}${tid && tid === openTest ? " rep-open" : ""}"${tid ? ` title="Open the full details of ${esc(tid)}"` : ""}>${show.map((i) => [chCol >= 0 && report.cols[i] === "Device" && r.cells[chCol] ? `${r.cells[i]} · ${r.cells[chCol]}` : r.cells[i], i]).map(([v, i]) => `<td data-label="${esc(raiseK(i) >= 0 && r.names ? `Raise ${r.names[raiseK(i)]} °C` : headOf(i))}" class="${i === 0 ? "lead-cell" : report.num.includes(i) ? "num" : ""}${colCls(i)}">${i === report.statusCol ? (report.title === "Test results" ? verdictPill(r.status) : `<span class="badge ${r.status === "crit" ? "crit" : "ok"}">${LIMIT_TEXT[r.status] || esc(v)}</span>`) : i === 0 && v ? testLink(id, v) : i === report.motorCol ? `<span class="mono">${esc(v)}</span>` : raiseK(i) >= 0 && v && r.names ? `<small class="muted">${esc(r.names[raiseK(i)])}</small> ${esc(v)}` : esc(v || "—")}</td>`).join("")}
           <td data-label="" class="rep-act"><div class="row-actions">
             ${tid ? `<button type="button" class="btn btn-sm btn-ghost" data-dl-test="${esc(tid)}" data-dl-motor="${esc(id)}" aria-label="Download test ${esc(tid)}" title="Download the results of test ${esc(tid)}">${ico("download")}</button>` : ""}
             ${tid ? `<button type="button" class="btn btn-sm btn-ghost" data-edit-test="${esc(tid)}" data-dl-motor="${esc(id)}" aria-label="Edit details of test ${esc(tid)}" title="Edit details of test ${esc(tid)}">${ico("edit")}</button>` : ""}
@@ -3762,7 +4006,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       let pts;
       if (cur) { const hp = histPoints(m), t0 = hp.length ? hp[0].t : Infinity; pts = [...m.trend.filter((p) => p.t < t0), ...hp]; }
       else pts = (r.readings || []).map(([t, ...v]) => ({ t, v }));
-      const rec = cur ? m : r.type ? r : { type: m.type, termIs: r.termIs }, N = namesOf(rec), live = cur && isRunning(m) && x.d.online;
+      const rec = cur ? m : r.type ? r : { type: m.type, termIs: r.termIs, readings: r.readings }, N = namesOf(rec), live = cur && isRunning(m) && x.d.online;
       $("#repLiveSub").innerHTML = pts.length ? `${pts.length} readings from ${esc(repStamp(pts[0].t))} to ${esc(new Date(pts[pts.length - 1].t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))} · on screen only, not in the downloaded report` : "No readings stored for this test";
       $("#repLiveLegend").innerHTML = N.map((p, j) => `<span><i style="background:${COLORS[j]}"></i>${p}</span>`).join("") + `<span><i class="dash"></i>Limit</span>`;
       lineChart($("#repLiveChart"), {
@@ -3816,9 +4060,9 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       if (!report || !report.rows.length) { toast("Nothing to download — change the filters"); return; }
       const sum = report.title === "Test results", names = sum ? [...KEY_COLS_PDF, "Reason"] : report.cols;
       const idx = names.map((c) => report.cols.indexOf(c)).filter((i) => i >= 0), sc = idx.indexOf(report.statusCol);
-      const W = { "Test ID": 1.1, Motor: 0.9, Condition: 0.9, Started: 1.4, "Monitoring for": 1, "Rise °C": 0.7, Device: 0.9, "Model / type": 1.8, Reason: 2.4, Time: 1.4, Channel: 0.7, "Limit check": 1 };
+      const W = { "Test ID": 1.1, Motor: 0.9, Condition: 0.9, Started: 1.4, "Started by": 1.1, "Monitoring for": 1, "Rise °C": 0.7, [`Temp raise ${T1N} °C`]: 0.8, [`Temp raise ${T2N} °C`]: 0.8, Device: 0.9, "Motor type": 1, "Stator No.": 1, Reason: 2.4, Time: 1.4, Channel: 0.7, "Limit check": 1 };
       const title = $("#repTitle").textContent;
-      saveBlob(pdfTableDoc({ title: `TractionTherm · ${title}`, sub: [filterText().join(" · "), `Test settings: maximum ${hoursText(LIM.AC.maxHours)} · readings ${recLabel()} · Stable when the last ${LIM.AC.settleN} readings each change less than ${LIM.AC.settleDiff} °C · Unstable above ${LIM.AC.crit} °C or when not settled in time`],
+      saveBlob(pdfTableDoc({ title: `TractionTherm · ${title}`, sub: [filterText().join(" · "), `Test settings: maximum ${hoursText(LIM.AC.maxHours)} · readings ${recLabel()} · Stable when the last ${LIM.AC.settleN} readings each change less than ${LIM.AC.settleDiff} °C · Unstable above ${riseRuleText()} or when not settled in time`],
         cols: idx.map((i) => ({ h: report.cols[i], w: W[report.cols[i]] || 0.8, right: report.num.includes(i) })),
         rows: report.rows.map((r) => idx.map((i) => r.cells[i] ?? "")), tone: (row, k) => (k === sc ? (/Unstable|Above/.test(row[k]) ? "crit" : /Stable|Within/.test(row[k]) ? "ok" : null) : null) }),
         `tractiontherm-${f.type.value}-${fileStamp()}.pdf`);
@@ -3835,21 +4079,22 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     }
     $("#repCsv").addEventListener("click", tableDownload);
     $("#repCsvHist").addEventListener("click", tableDownload);
-    const resetRules = () => { rules = []; f.ruleMode.value = "all"; rulesSig = ""; };
+    const resetRules = () => { rules = []; rulesSig = ""; };
     $("#repReset").addEventListener("click", () => { defaults(); syncCtype(); syncSearch(); resetRules(); render(); });
     // custom rules: the rule controls have no name, so they don't clash with the form's filters
     const ruleAt = (el) => rules[+el.closest(".rule-row").dataset.i];
     let ruleTimer;
     $("#ruleRows").addEventListener("input", (e) => {
-      if (!e.target.classList.contains("rule-v") || e.target.tagName === "SELECT") return;
+      if (!e.target.classList.contains("rule-v") || e.target.tagName === "SELECT" || e.target.type === "date") return;
       ruleAt(e.target)[e.target.dataset.key] = e.target.value;
       clearTimeout(ruleTimer); ruleTimer = setTimeout(() => { render(); drawChips(); }, 250); // filter as you type
     });
     $("#ruleRows").addEventListener("change", (e) => {
       const r = ruleAt(e.target), t = e.target.classList;
-      if (t.contains("rule-field")) Object.assign(r, newRule(e.target.value)); // a different kind of value: start fresh
+      if (t.contains("rule-join")) r.join = e.target.value;
+      else if (t.contains("rule-field")) Object.assign(r, newRule(e.target.value), { join: r.join }); // a different kind of value: start fresh
       else if (t.contains("rule-op")) r.op = e.target.value;
-      else if (t.contains("rule-v") && e.target.tagName === "SELECT") r[e.target.dataset.key] = e.target.value;
+      else if (t.contains("rule-v") && (e.target.tagName === "SELECT" || e.target.type === "date")) r[e.target.dataset.key] = e.target.value;
       else return; // typed values are already kept by the input listener; redrawing here would steal focus
       clearTimeout(ruleTimer);
       drawConds(true); // the form's own change listener then renders the report
@@ -3868,7 +4113,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
       drawConds(true); render();
     });
     $("#ruleAdd").addEventListener("click", () => {
-      rules.push(newRule(available(fieldOf("rise")) ? "rise" : "motor"));
+      rules.push(newRule("cond"));
       drawConds(true);
       $$("#ruleRows .rule-row").pop().querySelector(".rule-field").focus();
     });
@@ -4364,7 +4609,7 @@ ${charts.length ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="a
     initShell();
     applyPerms();
     $$('.nav a[href="index.html"]').forEach((a) => a.addEventListener("click", () => { logActivity("auth", "Signed out"); session.set(null); }));
-    const pages = { dashboard: pageDashboard, monitor: pageMonitor, motor: pageMotor, reports: pageReports, devices: pageDevices, device: pageDevice, motors: pageMotorMgmt, settings: pageSettings, users: pageUsers, roles: pageRoles, activity: pageActivity, profile: pageProfile, login: pageLogin };
+    const pages = { display: pageDisplay, dashboard: pageDashboard, monitor: pageMonitor, motor: pageMotor, reports: pageReports, devices: pageDevices, device: pageDevice, motors: pageMotorMgmt, settings: pageSettings, users: pageUsers, roles: pageRoles, activity: pageActivity, profile: pageProfile, login: pageLogin };
     const render = pages[page] ? pages[page]() : null;
     if (render) rerender = render;
     rtSyncPickers(); // real-time Range / Interval pickers already in the page

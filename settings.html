@@ -17,6 +17,7 @@
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
+      <a href="display.html"><i data-icon="screen"></i>Demo</a>
       <a href="reports.html"><i data-icon="report"></i>Results</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
@@ -51,7 +52,7 @@
       <div class="page-head">
         <div>
           <h2>Settings</h2>
-          <p>The test settings for three-phase and conventional motors alike: how long a test may run, how often readings are recorded, when the temperatures count as settled, the temperature that must not be exceeded, and the vibration question.</p>
+          <p>The test settings for three-phase and conventional motors alike: how long a test may run, how often readings are recorded, when the temperatures count as settled, the temperature limit (ambient at the test start + a rise per motor type), and the vibration question.</p>
         </div>
       </div>
 
@@ -88,9 +89,22 @@
             <span class="hint">Each of those readings changes less than this from the one before, on both motor sensors</span>
           </div>
           <div class="set-tile">
-            <label for="set-crit">Temperature must not exceed</label>
-            <div class="input-unit"><input class="input num" id="set-crit" type="number" step="1" min="20" max="250" inputmode="decimal"><span>°C</span></div>
-            <span class="hint">Hotter motor sensor · above it the motor is Unstable at once</span>
+            <label for="set-rate-max">Rate of change must not exceed</label>
+            <div class="set-pair">
+              <div class="input-unit"><input class="input num" id="set-rate-max" type="number" step="0.1" min="0.1" max="20" inputmode="decimal"><span>°C</span></div>
+              <div class="input-unit"><input class="input num" id="set-rate-n" type="number" step="1" min="2" max="20" inputmode="numeric" aria-label="Rate of change: across the last how many readings"><span>readings</span></div>
+            </div>
+            <span class="hint">Highest − lowest of the last this many readings, on both motor sensors · also needed for Stable</span>
+          </div>
+          <div class="set-tile">
+            <label for="set-rise-ac">Three-phase · must not exceed ambient at start +</label>
+            <div class="input-unit"><input class="input num" id="set-rise-ac" type="number" step="1" min="1" max="150" inputmode="decimal"><span>°C</span></div>
+            <span class="hint">Hotter of DE / NDE · above the ambient at the test start + this the motor is Unstable at once</span>
+          </div>
+          <div class="set-tile">
+            <label for="set-rise-dc">Conventional · must not exceed ambient at start +</label>
+            <div class="input-unit"><input class="input num" id="set-rise-dc" type="number" step="1" min="1" max="150" inputmode="decimal"><span>°C</span></div>
+            <span class="hint">Hotter of PE / CE · above the ambient at the test start + this the motor is Unstable at once</span>
           </div>
           <div class="set-tile" id="vibration">
             <span class="set-label">Vibration readings</span>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo · TractionTherm</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="display" class="display-page">
+<!-- A read-only screen for the test bench: one device's two channels, large, refreshing with every reading.
+     Nothing here changes data: no switches, edits, downloads or links that act. -->
+<div class="disp">
+  <header class="disp-head">
+    <div class="disp-brand">
+      <div class="brand-mark"><i data-icon="thermo"></i></div>
+      <div><div class="brand-name">TractionTherm</div><div class="disp-sub">Demo</div></div>
+    </div>
+    <label class="disp-dev"><span class="sr-only">Device</span><select class="select" id="dsDevice" aria-label="Device"></select></label>
+    <div class="disp-tools">
+      <span class="clock num" id="dsClock"></span>
+      <span class="live-tag"><span class="pulse"></span>Live</span>
+      <button class="icon-btn" type="button" id="dsFull" aria-label="Full screen" title="Full screen"><i data-icon="expand"></i></button>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle theme"></button>
+      <a class="icon-btn" href="monitor.html" aria-label="Back to Monitor" title="Back to Monitor"><i data-icon="chevronLeft"></i></a>
+    </div>
+  </header>
+  <main class="disp-main" id="dsMain" aria-live="off"></main>
+</div>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

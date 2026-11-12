@@ -17,6 +17,7 @@
       <div class="nav-label">Monitoring</div>
       <a href="dashboard.html"><i data-icon="grid"></i>Dashboard<span class="count" data-alert-count hidden>0</span></a>
       <a href="monitor.html"><i data-icon="activity"></i>Monitor</a>
+      <a href="display.html"><i data-icon="screen"></i>Demo</a>
       <a href="reports.html" aria-current="page"><i data-icon="report"></i>Results</a>
       <div class="nav-label">Configuration</div>
       <a href="devices.html"><i data-icon="cpu"></i>Devices</a>
@@ -87,18 +88,18 @@
               <select class="select" id="r-sin" name="sin" aria-label="Search in">
                 <option value="all">All fields</option>
                 <option value="test">Test ID</option>
-                <option value="motor">Motor ID</option>
-                <option value="stator" data-summary-only>Stator No.</option>
-                <option value="model" data-summary-only>Model / type</option>
-                <option value="loco" data-summary-only>Locomotive</option>
+                <option value="motor">Stator No.</option>
+                <option value="type" data-summary-only>Motor type</option>
+                <option value="user" data-summary-only>Started by</option>
                 <option value="device">Device</option>
                 <option value="location" data-summary-only>Location</option>
                 <option value="reason" data-summary-only>Reason</option>
-                <option value="time" data-readings-only>Reading time</option>
+                <option value="time" data-readings-only hidden>Reading time</option>
               </select>
               <div class="input-icon"><i data-icon="search"></i>
-                <input class="input" id="r-search" name="search" type="search" autocomplete="off" placeholder="Search test ID, motor, stator no., model, locomotive, device, location or reason"></div></div></div>
-          <div class="field"><label for="r-type">Results</label>
+                <input class="input" id="r-search" name="search" type="search" autocomplete="off" placeholder="Search test ID, stator no., motor type, device, location or reason"></div></div></div>
+          <!-- the Results page lists test results only: the type is fixed (the temperature-readings log is not offered) -->
+          <div class="field" hidden><label for="r-type">Results</label>
             <select class="select" id="r-type" name="type">
               <option value="summary">Test results (one row per test)</option>
               <option value="readings">Temperature readings (log)</option>
@@ -115,6 +116,9 @@
               <option value="temp">Temperature above the limit</option>
               <option value="hours" data-summary-only>Not settled in time</option>
             </select></div>
+          <div class="field"><label for="r-from">From date</label><input class="input" id="r-from" name="from" type="date" aria-describedby="r-dates-hint"></div>
+          <div class="field"><label for="r-to">To date</label><input class="input" id="r-to" name="to" type="date" aria-describedby="r-dates-hint">
+            <span class="hint" id="r-dates-hint">Tests started on these days (both included) · the table and the download</span></div>
           <div class="field rep-readings"><label for="r-range">Time range</label>
             <select class="select" id="r-range" name="range">
               <option value="15">Last 15 minutes</option><option value="30">Last 30 minutes</option><option value="60" selected>Last 1 hour</option><option value="all">Since monitoring started</option>
@@ -127,11 +131,7 @@
             <div class="rules-head">
               <div>
                 <div class="label">Custom rules</div>
-                <span class="hint">Narrow the results by temperature, condition or motor details · all values in °C</span>
-              </div>
-              <div class="segmented" id="ruleModeBox" role="radiogroup" aria-label="Rows must match" hidden>
-                <input type="radio" name="ruleMode" id="rm-all" value="all" checked><label for="rm-all">Match all rules</label>
-                <input type="radio" name="ruleMode" id="rm-any" value="any"><label for="rm-any">Match any rule</label>
+                <span class="hint">Narrow the results by any column · join rules with AND / OR (AND is grouped first) · temperatures in °C</span>
               </div>
             </div>
             <div class="rule-chips" id="ruleChips" role="group" aria-label="Quick rules from the motor conditions"></div>
@@ -146,7 +146,7 @@
 
       <section class="card summary-strip" id="repSummary" aria-label="Results summary"></section>
 
-      <section class="card report-card">
+      <section class="card report-card" id="repTableCard">
         <div class="card-head"><div><h3 id="repTitle">Preview</h3><div class="sub" id="repMeta"></div></div>
           <button class="btn btn-sm btn-primary" type="button" id="repCsvHist" hidden><i data-icon="download"></i>Download CSV / PDF</button></div>
         <div class="print-head" id="repPrintHead"></div>
