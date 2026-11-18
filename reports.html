@@ -53,7 +53,7 @@
         <div>
           <a class="back-link" id="repBack" href="monitor.html" hidden>&larr; Back</a>
           <h2>Results</h2>
-          <p>Completed tests only (Stable or Unstable) · tests in progress are on the Monitor page. Choose filters, check the preview, then download them as CSV or PDF.</p>
+          <p>Finished and stopped tests (Stable, Unstable or Stopped) · tests in progress are on the Monitor page. Choose filters, check the preview, then download them as CSV or PDF.</p>
         </div>
         <div class="actions">
           <button class="btn" type="button" data-dl-all-motors title="The latest completed test of every motor, one sheet each · you choose the file format"><i data-icon="download"></i>All motor results</button>
@@ -108,7 +108,7 @@
           <div class="field"><label for="r-motor">Motor</label><select class="select" id="r-motor" name="motor"></select></div>
           <div class="field"><label for="r-cond">Condition</label>
             <select class="select" id="r-cond" name="cond">
-              <option value="all">All conditions</option><option value="ok">Stable</option><option value="crit">Unstable</option>
+              <option value="all">All conditions</option><option value="ok">Stable</option><option value="crit">Unstable</option><option value="stop">Stopped (not finished)</option>
             </select></div>
           <div class="field"><label for="r-ctype">Condition type</label>
             <select class="select" id="r-ctype" name="ctype">
