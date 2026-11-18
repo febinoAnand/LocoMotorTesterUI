@@ -67,50 +67,61 @@
         </div>
         <p class="form-note term-note" id="setLocked" hidden><i data-icon="lock"></i>Your role can view these settings but not change them.</p>
         <div class="form-error" id="setError" role="alert"></div>
-        <div class="set-tiles" id="setTiles">
-          <div class="set-tile">
-            <label for="set-hours">Maximum test hours</label>
-            <div class="input-unit"><input class="input num" id="set-hours" type="number" step="0.5" min="0.5" max="48" inputmode="decimal"><span>h</span></div>
-            <span class="hint">Stable must be reached within this time · a test may run on, with a message</span>
-          </div>
-          <div class="set-tile">
-            <label for="set-every">Interval time</label>
-            <div class="input-unit"><input class="input num" id="set-every" type="number" step="1" min="1" max="240" inputmode="numeric"><span>min</span></div>
-            <span class="hint">A reading is recorded this often from the test start · results, downloads and the settle check use them</span>
-          </div>
-          <div class="set-tile">
-            <label for="set-n">Last how many readings</label>
-            <div class="input-unit"><input class="input num" id="set-n" type="number" step="1" min="2" max="20" inputmode="numeric"><span>readings</span></div>
-            <span class="hint">How many recorded readings in a row must have settled</span>
-          </div>
-          <div class="set-tile">
-            <label for="set-diff">Change less than</label>
-            <div class="input-unit"><input class="input num" id="set-diff" type="number" step="0.1" min="0.1" max="10" inputmode="decimal"><span>°C</span></div>
-            <span class="hint">Each of those readings changes less than this from the one before, on both motor sensors</span>
-          </div>
-          <div class="set-tile">
-            <label for="set-rate-max">Rate of change must not exceed</label>
-            <div class="set-pair">
-              <div class="input-unit"><input class="input num" id="set-rate-max" type="number" step="0.1" min="0.1" max="20" inputmode="decimal"><span>°C</span></div>
-              <div class="input-unit"><input class="input num" id="set-rate-n" type="number" step="1" min="2" max="20" inputmode="numeric" aria-label="Rate of change: across the last how many readings"><span>readings</span></div>
+        <div class="set-tiles set-groups" id="setTiles">
+          <section class="set-tile set-group sg-blue" aria-labelledby="sg-time">
+            <div class="set-group-h"><span class="sg-ico"><i data-icon="clock"></i></span><div><h4 id="sg-time">Test time</h4><span>How long a test may take and how often a reading is recorded</span></div></div>
+            <div class="sg-fields">
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-hours">Maximum test hours</label><span class="hint">Stable must be reached within this time · a test may run on, with a message</span></div>
+                <div class="input-unit"><input class="input num" id="set-hours" type="number" step="0.5" min="0.5" max="48" inputmode="decimal"><span>h</span></div>
+              </div>
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-every">Interval time</label><span class="hint">A reading is recorded this often from the test start · results, downloads and the checks use them</span></div>
+                <div class="input-unit"><input class="input num" id="set-every" type="number" step="1" min="1" max="240" inputmode="numeric"><span>min</span></div>
+              </div>
             </div>
-            <span class="hint">Highest − lowest of the last this many readings, on both motor sensors · also needed for Stable</span>
-          </div>
-          <div class="set-tile">
-            <label for="set-rise-ac">Three-phase · must not exceed ambient at start +</label>
-            <div class="input-unit"><input class="input num" id="set-rise-ac" type="number" step="1" min="1" max="150" inputmode="decimal"><span>°C</span></div>
-            <span class="hint">Hotter of DE / NDE · above the ambient at the test start + this the motor is Unstable at once</span>
-          </div>
-          <div class="set-tile">
-            <label for="set-rise-dc">Conventional · must not exceed ambient at start +</label>
-            <div class="input-unit"><input class="input num" id="set-rise-dc" type="number" step="1" min="1" max="150" inputmode="decimal"><span>°C</span></div>
-            <span class="hint">Hotter of PE / CE · above the ambient at the test start + this the motor is Unstable at once</span>
-          </div>
-          <div class="set-tile" id="vibration">
-            <span class="set-label">Vibration readings</span>
+            <div class="sg-note" id="sgTimeNote" aria-live="polite"></div>
+          </section>
+          <section class="set-tile set-group sg-green" aria-labelledby="sg-stable">
+            <div class="set-group-h"><span class="sg-ico"><i data-icon="check"></i></span><div><h4 id="sg-stable">Stable when</h4><span>Both rules, on both motor sensors, within the maximum hours</span></div></div>
+            <div class="sg-fields">
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-n">Last how many readings</label><span class="hint">How many recorded readings in a row must have settled</span></div>
+                <div class="input-unit"><input class="input num" id="set-n" type="number" step="1" min="2" max="20" inputmode="numeric"><span>readings</span></div>
+              </div>
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-diff">Each change less than</label><span class="hint">Each of those readings changes less than this from the one before</span></div>
+                <div class="input-unit"><input class="input num" id="set-diff" type="number" step="0.1" min="0.1" max="10" inputmode="decimal"><span>°C</span></div>
+              </div>
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-rate-max">Rate of change must not exceed</label><span class="hint">Highest − lowest of the last this many readings</span></div>
+                <div class="set-pair"><div class="input-unit"><input class="input num" id="set-rate-max" type="number" step="0.1" min="0.1" max="20" inputmode="decimal"><span>°C</span></div><div class="input-unit"><input class="input num" id="set-rate-n" type="number" step="1" min="2" max="20" inputmode="numeric" aria-label="Rate of change: over the last how many readings"><span>readings</span></div></div>
+              </div>
+            </div>
+            <div class="sg-note" id="sgStableNote" aria-live="polite"></div>
+          </section>
+          <section class="set-tile set-group sg-red" aria-labelledby="sg-limit">
+            <div class="set-group-h"><span class="sg-ico"><i data-icon="thermo"></i></span><div><h4 id="sg-limit">Temperature limit</h4><span>Must not exceed the ambient at the test start + this · above it Unstable at once</span></div></div>
+            <div class="sg-fields">
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-rise-ac">Three-phase</label><span class="hint">Hotter of DE / NDE</span></div>
+                <div class="input-unit"><input class="input num" id="set-rise-ac" type="number" step="1" min="1" max="150" inputmode="decimal"><span>°C</span></div>
+              </div>
+              <div class="set-row">
+                <div class="set-row-txt"><label for="set-rise-dc">Conventional</label><span class="hint">Hotter of PE / CE</span></div>
+                <div class="input-unit"><input class="input num" id="set-rise-dc" type="number" step="1" min="1" max="150" inputmode="decimal"><span>°C</span></div>
+              </div>
+            </div>
+            <div class="sg-note" id="sgLimitNote" aria-live="polite"></div>
+          </section>
+          <section class="set-tile set-group sg-violet" id="vibration" aria-labelledby="sg-vib">
+            <div class="set-group-h"><span class="sg-ico"><i data-icon="activity"></i></span><div><h4 id="sg-vib">Vibration readings</h4><span>SKF velocity (mm/s) and envelope (gE) on each side</span></div></div>
+            <div class="sg-fields">
             <label class="check switch-row vib-ask"><input type="checkbox" id="vibAsk"> Ask when a motor is stopped</label>
-            <span class="hint">SKF velocity (mm/s) and envelope (gE) on each side · saved with the test and shown in its report</span>
-          </div>
+            <span class="hint">Saved with the test and shown in its report</span>
+            </div>
+            <div class="sg-note" id="sgVibNote" aria-live="polite"></div>
+          </section>
         </div>
         <div class="set-rules" id="setRules"></div>
         <div class="card-foot muted set-live" id="setLive"></div>

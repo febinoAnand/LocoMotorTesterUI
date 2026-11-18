@@ -51,8 +51,7 @@
     <main class="content">
       <div class="page-head">
         <div>
-          <h2>Motor temperatures</h2>
-          <p>Live readings from every device · each device has 2 channels · each motor has two sensors, <span data-sensor="1">T1</span> (<span data-sensor-is="1">DE / PE</span>) and <span data-sensor="2">T2</span> (<span data-sensor-is="2">NDE / CE</span>), plus ambient TA.</p>
+          <h2>Dashboard</h2>
         </div>
         <div class="actions">
           <a class="btn" href="reports.html"><i data-icon="report"></i>Results</a>
@@ -60,19 +59,31 @@
         </div>
       </div>
 
-      <section class="alarm-bar" id="alarmBar" aria-live="polite" hidden></section>
 
       <section class="card summary-strip" id="summary" aria-label="Summary"></section>
 
-      <section class="card">
-        <div class="card-head">
-          <div><h3>Motor temperature</h3><div class="sub">Every motor, hottest first · the red line marks the temperature that must not be exceeded · outline = predicted final temperature</div></div>
-          <div class="legend">
-            <span><i style="background:var(--series-1)"></i>T1 (DE / PE)</span><span><i style="background:var(--series-2)"></i>T2 (NDE / CE)</span>
+      <!-- pick any motor to see it here · every motor being checked now · the most recently finished tests -->
+      <div class="dash-grid">
+        <section class="card dash-focus" aria-labelledby="dfTitle">
+          <div class="card-head">
+            <div><h3 id="dfTitle">Motor focus</h3><div class="sub">Pick any motor to see its state, readings and last tests</div></div>
+            <label class="dash-pick"><span class="sr-only">Motor</span><select class="select" id="dfMotor" aria-label="Motor to show"></select></label>
           </div>
+          <div class="card-body" id="dfBody"></div>
+        </section>
+        <div class="dash-side">
+          <section class="card dash-running" aria-labelledby="drTitle">
+            <div class="card-head"><div><h3 id="drTitle">Running now</h3><div class="sub" id="drSub"></div></div></div>
+            <div id="drList"></div>
+          </section>
+          <section class="card dash-last" aria-labelledby="dlTitle">
+            <div class="card-head"><div><h3 id="dlTitle">Last checked motors</h3><div class="sub" id="dlSub"></div></div><a class="btn btn-sm" href="reports.html"><i data-icon="report"></i>All results</a></div>
+            <ul class="dr-list dl-list" id="dlRows"></ul>
+            <div class="dl-pager" id="dlPager"></div>
+          </section>
         </div>
-        <div class="card-body" id="riseChart"></div>
-      </section>
+      </div>
+
     </main>
   </div>
 </div>
